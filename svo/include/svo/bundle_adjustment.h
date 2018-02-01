@@ -17,6 +17,8 @@
 #ifndef SVO_BUNDLE_ADJUSTMENT_H_
 #define SVO_BUNDLE_ADJUSTMENT_H_
 
+#ifdef USE_BUNDLE_ADJUSTMENT
+
 #include <svo/global.h>
 
 namespace g2o {
@@ -105,5 +107,7 @@ g2oEdgeSE3* createG2oEdgeSE3(
 
 } // namespace ba
 } // namespace svo
+
+#endif
 
 #endif // SVO_BUNDLE_ADJUSTMENT_H_

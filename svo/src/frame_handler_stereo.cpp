@@ -34,9 +34,12 @@ namespace svo {
         for(int i=0;i<new_frames_->size();i++) printf("%f ", calcReprojectError(new_frames_->at(i))); \
         printf("\n");}*/
 
-FrameHandlerStereo::FrameHandlerStereo(vk::AbstractCamera* cam) :
+FrameHandlerStereo::FrameHandlerStereo(vk::AbstractCamera* cam,
+  const Sophus::SE3& T_caml_body, const Sophus::SE3& T_camr_body):
   FrameHandlerBase(),
   cam_(cam),
+  T_caml_body_(T_caml_body),
+  T_camr_body_(T_camr_body),
   reprojector_(cam_, map_),
   depth_filter_(NULL)
 {
@@ -69,12 +72,6 @@ void FrameHandlerStereo::addImage(const cv::Mat& img_left, const cv::Mat& img_ri
   core_kfs_.clear();
   overlap_kfs_.clear();
 
-  Matrix3d R_cam_body;
-  R_cam_body<<0,1,0,0,0,1,1,0,0;
-  Vector3d t_cam_body;
-  t_cam_body<<0,0,0;
-  Vector3d t_cam_body_right;
-  t_cam_body_right<<-0.11944,0,0;
 #if 1 // stereo svo
   // create new frame
   SVO_START_TIMER("pyramid_creation");
@@ -82,8 +79,8 @@ void FrameHandlerStereo::addImage(const cv::Mat& img_left, const cv::Mat& img_ri
                       FramePtr(new Frame(cam_, img_left.clone(), timestamp)),
                       FramePtr(new Frame(cam_, img_right.clone(), timestamp))
                     })));
-  new_frames_->at(0)->set_T_cam_body(SE3(R_cam_body, t_cam_body));
-  new_frames_->at(1)->set_T_cam_body(SE3(R_cam_body, t_cam_body_right));
+  new_frames_->at(0)->set_T_cam_body(T_caml_body_);
+  new_frames_->at(1)->set_T_cam_body(T_camr_body_);
   SVO_STOP_TIMER("pyramid_creation");
 
   // process frame

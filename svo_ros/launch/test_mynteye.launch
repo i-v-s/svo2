@@ -8,9 +8,6 @@
     <!-- Camera calibration file -->
     <rosparam file="$(find svo_ros)/param/camera_mynteye.yaml" />
 
-    <!-- Default parameter settings: choose between vo_fast and vo_accurate -->
-    <rosparam file="$(find svo_ros)/param/vo_accurate.yaml" />
-    
   </node>
 
   <!-- node name="rvizvisualisation" pkg="rviz" type="rviz" output="log" args="-d $(find svo_ros)/rviz_config.rviz" /-->

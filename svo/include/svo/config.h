@@ -33,6 +33,8 @@ class Config
 public:
   static Config& getInstance();
 
+  static bool loadConfigYml(const char* file);
+
   /// Base-name of the tracefiles.
   static string& traceName() { return getInstance().trace_name; }
 

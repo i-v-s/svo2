@@ -75,17 +75,16 @@ VoNode::VoNode() :
   if(!vk::camera_loader::loadFromRosNs("svo", cam_))
     throw std::runtime_error("Camera model not correctly specified.");
 
-  // Get initial position and orientation
-  visualizer_.T_world_from_vision_ = Sophus::SE3(
-      vk::rpy2dcm(Vector3d(vk::getParam<double>("svo/init_rx", 0.0),
-                           vk::getParam<double>("svo/init_ry", 0.0),
-                           vk::getParam<double>("svo/init_rz", 0.0))),
-      Eigen::Vector3d(vk::getParam<double>("svo/init_tx", 0.0),
-                      vk::getParam<double>("svo/init_ty", 0.0),
-                      vk::getParam<double>("svo/init_tz", 0.0)));
+  const char* param_file = "/home/symao/catkin_ws/src/rpg_svo/svo_ros/param/vo_accurate.yaml";
+  if(!svo::Config::loadConfigYml(param_file))
+  {
+    printf("[ERROR]:load config '%s' failed.\n", param_file);
+  }
 
   // Init VO and start
-  vo_ = new svo::FrameHandlerStereo(cam_);
+  Eigen::Matrix3d R_cam_body;
+  R_cam_body<<0,1,0,0,0,1,1,0,0;
+  vo_ = new svo::FrameHandlerStereo(cam_, Sophus::SE3(R_cam_body,Eigen::Vector3d(0,0,0)), Sophus::SE3(R_cam_body,Eigen::Vector3d(-0.11944,0,0)));
   vo_->start();
 }
 

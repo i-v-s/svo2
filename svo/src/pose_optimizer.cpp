@@ -181,7 +181,7 @@ void optimizeGaussNewton(
 
   // compute the scale of the error for robust estimation
   std::vector<float> errors; errors.reserve(frames->numFeatures());
-  for(auto i=0; i<frames->size(); i++)
+  for(size_t i=0; i<frames->size(); i++)
   {
     FramePtr frame = frames->at(i);
     for(auto it=frame->fts_.begin(); it!=frame->fts_.end(); ++it)
@@ -214,7 +214,7 @@ void optimizeGaussNewton(
     double new_chi2(0.0);
 
     // compute residual
-    for(auto i=0; i<frames->size(); i++)
+    for(size_t i=0; i<frames->size(); i++)
     {
       FramePtr frame = frames->at(i);
       for(auto it=frame->fts_.begin(); it!=frame->fts_.end(); ++it)
@@ -266,7 +266,7 @@ void optimizeGaussNewton(
 
   // Set covariance as inverse information matrix. Optimistic estimator!
   const double pixel_variance=1.0;
-  for(auto i=0; i<frames->size(); i++)
+  for(size_t i=0; i<frames->size(); i++)
   {
     frames->at(i)->Cov_ = pixel_variance*(A*std::pow(frames->at(i)->cam_->errorMultiplier2(),2)).inverse();
   }  
@@ -274,7 +274,7 @@ void optimizeGaussNewton(
   // Remove Measurements with too large reprojection error
   double reproj_thresh_scaled = reproj_thresh / focal_len;
   size_t n_deleted_refs = 0;
-  for(auto i=0; i<frames->size(); i++)
+  for(size_t i=0; i<frames->size(); i++)
   {
     FramePtr frame = frames->at(i);
     for(Features::iterator it=frame->fts_.begin(); it!=frame->fts_.end(); ++it)

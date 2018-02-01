@@ -33,7 +33,7 @@ class FrameHandlerStereo : public FrameHandlerBase
 public:
   EIGEN_MAKE_ALIGNED_OPERATOR_NEW
   
-  FrameHandlerStereo(vk::AbstractCamera* cam);
+  FrameHandlerStereo(vk::AbstractCamera* cam, const Sophus::SE3& T_caml_body, const Sophus::SE3& T_camr_body);
   virtual ~FrameHandlerStereo();
 
   /// Provide an image.
@@ -57,6 +57,8 @@ public:
 
 protected:
   vk::AbstractCamera* cam_;                     //!< Camera model, can be ATAN, Pinhole or Ocam (see vikit).
+  Sophus::SE3 T_caml_body_;                     //!< Camera extrinsic
+  Sophus::SE3 T_camr_body_;                     //!< Camera extrinsic
   Reprojector reprojector_;                     //!< Projects points from other keyframes into the current frame
   FrameBundlePtr new_frames_;                   //!< Current frame.
   FrameBundlePtr last_frames_;                  //!< Last frame, not necessarily a keyframe.

@@ -1,3 +1,4 @@
+%YAML:1.0
 grid_size: 20
 max_n_kfs: 30
 loba_num_iter: 10

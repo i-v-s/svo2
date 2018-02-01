@@ -207,7 +207,7 @@ InitResult initFrameStereo(FramePtr frame_left, FramePtr frame_right)
 
   double baseline = (frame_left->T_body_cam_ * frame_right->T_cam_body_).translation().norm();
 
-  int inlier_cnt = 0;
+  size_t inlier_cnt = 0;
   for(size_t i=0; i<px_left.size(); i++)
   {
     cv::Point2f p_left = px_left[i];

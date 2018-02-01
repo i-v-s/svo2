@@ -13,6 +13,7 @@
 //
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
+#ifdef USE_BUNDLE_ADJUSTMENT
 
 #include <vikit/math_utils.h>
 #include <boost/thread.hpp>
@@ -433,3 +434,5 @@ createG2oEdgeSE3( g2oFrameSE3* v_frame,
 
 } // namespace ba
 } // namespace svo
+
+#endif

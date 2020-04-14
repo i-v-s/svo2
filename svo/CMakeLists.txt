@@ -8,7 +8,7 @@ SET(DEBUG_OUTPUT FALSE) # Only relevant if build without ROS
 
 ################################################################################
 
-PROJECT(svo)
+PROJECT(svolib)
 cmake_minimum_required(VERSION 3.10 FATAL_ERROR)
 SET(CMAKE_BUILD_TYPE Release) # Release, RelWithDebInfo
 SET(CMAKE_VERBOSE_MAKEFILE OFF)

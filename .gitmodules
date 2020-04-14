@@ -1,0 +1,10 @@
+[submodule "modules/vikit"]
+	path = modules/vikit
+	url = ../../i-v-s/vikit.git
+[submodule "modules/vilib"]
+	path = modules/vilib
+	url = ../../i-v-s/vilib.git
+[submodule "modules/pybind11"]
+	path = modules/pybind11
+	url = ../../pybind/pybind11.git
+	branch = v2.5

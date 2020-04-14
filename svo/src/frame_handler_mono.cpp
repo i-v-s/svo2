@@ -30,29 +30,24 @@
 
 namespace svo {
 
-FrameHandlerMono::FrameHandlerMono(vk::AbstractCamera* cam) :
-  FrameHandlerBase(),
-  cam_(cam),
-  reprojector_(cam_, map_),
-  depth_filter_(NULL)
+FrameHandlerMono::FrameHandlerMono(vk::AbstractCamera* cam, std::shared_ptr<vilib::DetectorBaseGPU> detector) :
+    FrameHandlerBase(),
+    cam_(cam),
+    reprojector_(cam_, map_)
 {
-  initialize();
+    initialize(detector);
 }
 
-void FrameHandlerMono::initialize()
+void FrameHandlerMono::initialize(std::shared_ptr<vilib::DetectorBaseGPU> detector)
 {
-  feature_detection::DetectorPtr feature_detector(
-      new feature_detection::FastDetector(
-          cam_->width(), cam_->height(), Config::gridSize(), Config::nPyrLevels()));
-  DepthFilter::callback_t depth_filter_cb = boost::bind(
-      &MapPointCandidates::newCandidatePoint, &map_.point_candidates_, _1, _2);
-  depth_filter_ = new DepthFilter(feature_detector, depth_filter_cb);
-  depth_filter_->startThread();
-}
-
-FrameHandlerMono::~FrameHandlerMono()
-{
-  delete depth_filter_;
+    //auto feature_detector = std::make_unique<vilib::DetectorBaseGPU>
+    //    new feature_detection::FastDetector(
+    //        cam_->width(), cam_->height(), Config::gridSize(), Config::nPyrLevels()));
+    DepthFilter::callback_t depth_filter_cb = std::bind(
+        &MapPointCandidates::newCandidatePoint, &map_.point_candidates_,
+        std::placeholders::_1, std::placeholders::_2);
+    depth_filter_ = std::make_unique<DepthFilter>(detector, depth_filter_cb);
+    depth_filter_->startThread();
 }
 
 void FrameHandlerMono::addImage(const cv::Mat& img, const double timestamp)
@@ -78,7 +73,7 @@ void FrameHandlerMono::addImage(const cv::Mat& img, const double timestamp)
   else if(stage_ == STAGE_FIRST_FRAME)
     res = processFirstFrame();
   else if(stage_ == STAGE_RELOCALIZING)
-    res = relocalizeFrame(SE3(Matrix3d::Identity(), Vector3d::Zero()),
+    res = relocalizeFrame(SE3d(Matrix3d::Identity(), Vector3d::Zero()),
                           map_.getClosestKeyframe(last_frame_));
 
   // set last frame
@@ -90,7 +85,7 @@ void FrameHandlerMono::addImage(const cv::Mat& img, const double timestamp)
 
 FrameHandlerMono::UpdateResult FrameHandlerMono::processFirstFrame()
 {
-  new_frame_->T_f_w_ = SE3(Matrix3d::Identity(), Vector3d::Zero());
+  new_frame_->T_f_w_ = SE3d(Matrix3d::Identity(), Vector3d::Zero());
   if(klt_homography_init_.addFirstFrame(new_frame_) == initialization::FAILURE)
     return RESULT_NO_KEYFRAME;
   new_frame_->setKeyframe();
@@ -203,7 +198,7 @@ FrameHandlerBase::UpdateResult FrameHandlerMono::processFrame()
   // new keyframe selected
   for(Features::iterator it=new_frame_->fts_.begin(); it!=new_frame_->fts_.end(); ++it)
     if((*it)->point != NULL)
-      (*it)->point->addFrameRef(*it);
+      (*it)->point->addFrameRef(it->get());
   map_.point_candidates_.addCandidatePointToFrame(new_frame_);
 
   // optional bundle adjustment
@@ -242,7 +237,7 @@ FrameHandlerBase::UpdateResult FrameHandlerMono::processFrame()
 }
 
 FrameHandlerMono::UpdateResult FrameHandlerMono::relocalizeFrame(
-    const SE3& T_cur_ref,
+    const SE3d& T_cur_ref,
     FramePtr ref_keyframe)
 {
   SVO_WARN_STREAM_THROTTLE(1.0, "Relocalizing frame");
@@ -274,7 +269,7 @@ FrameHandlerMono::UpdateResult FrameHandlerMono::relocalizeFrame(
 
 bool FrameHandlerMono::relocalizeFrameAtPose(
     const int keyframe_id,
-    const SE3& T_f_kf,
+    const SE3d& T_f_kf,
     const cv::Mat& img,
     const double timestamp)
 {
@@ -324,11 +319,15 @@ bool FrameHandlerMono::needNewKf(double scene_depth_mean)
 
 void FrameHandlerMono::setCoreKfs(size_t n_closest)
 {
-  size_t n = min(n_closest, overlap_kfs_.size()-1);
-  std::partial_sort(overlap_kfs_.begin(), overlap_kfs_.begin()+n, overlap_kfs_.end(),
-                    boost::bind(&pair<FramePtr, size_t>::second, _1) >
-                    boost::bind(&pair<FramePtr, size_t>::second, _2));
-  std::for_each(overlap_kfs_.begin(), overlap_kfs_.end(), [&](pair<FramePtr,size_t>& i){ core_kfs_.insert(i.first); });
+    using namespace std;
+    size_t n = min(n_closest, overlap_kfs_.size() - 1);
+    std::partial_sort(
+        overlap_kfs_.begin(), overlap_kfs_.begin() + n, overlap_kfs_.end(),
+        [](const pair<FramePtr, size_t> &a, const pair<FramePtr, size_t> &b){return a.second > b.second;}
+              //std::bind(&pair<FramePtr, size_t>::second, std::placeholders::_1) >
+              //std::bind(&pair<FramePtr, size_t>::second, std::placeholders::_2)
+    );
+    std::for_each(overlap_kfs_.begin(), overlap_kfs_.end(), [&](pair<FramePtr,size_t>& i){ core_kfs_.insert(i.first); });
 }
 
 } // namespace svo

@@ -131,7 +131,7 @@ FrameHandlerStereo::UpdateResult FrameHandlerStereo::processFirstFrame()
   // new_frames_->set_T_W_B(new_frames_->at(0)->T_cam_imu());
   new_frames_->set_T_W_B(last_imu_pose_);
 
-  initialization::InitResult res = initialization::initFrameStereo(new_frames_->at(0),new_frames_->at(1));
+  initialization::InitResult res = initializer.initFrameStereo(new_frames_->at(0),new_frames_->at(1));
   if(res == initialization::FAILURE)
     return RESULT_FAILURE;
   else if(res == initialization::NO_KEYFRAME)
@@ -316,7 +316,7 @@ FrameHandlerBase::UpdateResult FrameHandlerStereo::processFrame()
 }
 
 FrameHandlerStereo::UpdateResult FrameHandlerStereo::relocalizeFrame(
-    const SE3& T_cur_ref,
+    const SE3d& T_cur_ref,
     FramePtr ref_keyframe)
 {
   return RESULT_FAILURE;
@@ -324,7 +324,7 @@ FrameHandlerStereo::UpdateResult FrameHandlerStereo::relocalizeFrame(
 
 bool FrameHandlerStereo::relocalizeFrameAtPose(
     const int keyframe_id,
-    const SE3& T_f_kf,
+    const SE3d& T_f_kf,
     const cv::Mat& img,
     const double timestamp)
 {

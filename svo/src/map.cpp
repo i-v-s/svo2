@@ -19,7 +19,8 @@
 #include <svo/point.h>
 #include <svo/frame.h>
 #include <svo/feature.h>
-#include <boost/bind.hpp>
+
+using namespace std;
 
 namespace svo {
 
@@ -45,8 +46,8 @@ bool Map::safeDeleteFrame(FramePtr frame)
   {
     if(*it == frame)
     {
-      std::for_each((*it)->fts_.begin(), (*it)->fts_.end(), [&](Feature* ftr){
-        removePtFrameRef(it->get(), ftr);
+      std::for_each((*it)->fts_.begin(), (*it)->fts_.end(), [&](std::unique_ptr<Feature> &ftr){
+        removePtFrameRef(it->get(), ftr.get());
       });
       keyframes_.erase(it);
       found = true;
@@ -105,7 +106,7 @@ void Map::addKeyframe(FramePtr new_keyframe)
 
 void Map::getCloseKeyframes(
     const FramePtr& frame,
-    std::list< std::pair<FramePtr,double> >& close_kfs) const
+    std::vector< std::pair<FramePtr, double> >& close_kfs) const
 {
   for(auto kf : keyframes_)
   {
@@ -117,9 +118,7 @@ void Map::getCloseKeyframes(
 
       if(frame->isVisible(keypoint->point->pos_))
       {
-        close_kfs.push_back(
-            std::make_pair(
-                kf, (frame->T_f_w_.translation()-kf->T_f_w_.translation()).norm()));
+        close_kfs.emplace_back(kf, (frame->T_f_w_.translation()-kf->T_f_w_.translation()).norm());
         break; // this keyframe has an overlapping field of view -> add to close_kfs
       }
     }
@@ -128,22 +127,21 @@ void Map::getCloseKeyframes(
 
 FramePtr Map::getClosestKeyframe(const FramePtr& frame) const
 {
-  list< pair<FramePtr,double> > close_kfs;
-  getCloseKeyframes(frame, close_kfs);
-  if(close_kfs.empty())
-  {
-    return nullptr;
-  }
+    vector< pair<FramePtr, double> > close_kfs;
+    getCloseKeyframes(frame, close_kfs);
+    if(close_kfs.empty())
+        return nullptr;
 
+    // Sort KFs with overlap according to their closeness
+    std::partial_sort(close_kfs.begin(), std::next(close_kfs.begin(), 2), close_kfs.end(), [](const std::pair<FramePtr, double> &a, const std::pair<FramePtr, double> &b){
+        return a.second < b.second;
+    });
+    //close_kfs.sort(boost::bind(&std::pair<FramePtr, double>::second, _1) <
+    //               boost::bind(&std::pair<FramePtr, double>::second, _2));
 
-  // Sort KFs with overlap according to their closeness
-  close_kfs.sort(boost::bind(&std::pair<FramePtr, double>::second, _1) <
-                 boost::bind(&std::pair<FramePtr, double>::second, _2));
-
-  if(close_kfs.front().first != frame)
-    return close_kfs.front().first;
-  close_kfs.pop_front();
-  return close_kfs.front().first;
+    if(close_kfs.front().first != frame)
+        return close_kfs.front().first;
+    return close_kfs[1].first;
 }
 
 FramePtr Map::getFurthestKeyframe(const Vector3d& pos) const
@@ -178,7 +176,7 @@ void Map::transform(const Matrix3d& R, const Vector3d& t, const double& s)
   for(auto it=keyframes_.begin(), ite=keyframes_.end(); it!=ite; ++it)
   {
     Vector3d pos = s*R*(*it)->pos() + t;
-    Matrix3d rot = R*(*it)->T_f_w_.rotation_matrix().inverse();
+    Matrix3d rot = R*(*it)->T_f_w_.rotationMatrix().inverse();
     (*it)->T_f_w_ = SE3(rot, pos).inverse();
     for(auto ftr=(*it)->fts_.begin(); ftr!=(*it)->fts_.end(); ++ftr)
     {
@@ -212,14 +210,14 @@ MapPointCandidates::~MapPointCandidates()
 
 void MapPointCandidates::newCandidatePoint(Point* point, double depth_sigma2)
 {
-  point->type_ = Point::TYPE_CANDIDATE;
-  boost::unique_lock<boost::mutex> lock(mut_);
-  candidates_.push_back(PointCandidate(point, point->obs_.front()));
+    point->type_ = Point::TYPE_CANDIDATE;
+    std::lock_guard<std::mutex> lock(mut_);
+    candidates_.push_back(PointCandidate(point, point->obs_.front()));
 }
 
 void MapPointCandidates::addCandidatePointToFrame(FramePtr frame)
 {
-  boost::unique_lock<boost::mutex> lock(mut_);
+  std::lock_guard<std::mutex> lock(mut_);
   PointCandidateList::iterator it=candidates_.begin();
   while(it != candidates_.end())
   {
@@ -238,7 +236,7 @@ void MapPointCandidates::addCandidatePointToFrame(FramePtr frame)
 
 bool MapPointCandidates::deleteCandidatePoint(Point* point)
 {
-  boost::unique_lock<boost::mutex> lock(mut_);
+  std::lock_guard<std::mutex> lock(mut_);
   for(auto it=candidates_.begin(), ite=candidates_.end(); it!=ite; ++it)
   {
     if(it->first == point)
@@ -253,7 +251,7 @@ bool MapPointCandidates::deleteCandidatePoint(Point* point)
 
 void MapPointCandidates::removeFrameCandidates(FramePtr frame)
 {
-  boost::unique_lock<boost::mutex> lock(mut_);
+  std::lock_guard<std::mutex> lock(mut_);
   auto it=candidates_.begin();
   while(it!=candidates_.end())
   {
@@ -269,7 +267,7 @@ void MapPointCandidates::removeFrameCandidates(FramePtr frame)
 
 void MapPointCandidates::reset()
 {
-  boost::unique_lock<boost::mutex> lock(mut_);
+  std::lock_guard<std::mutex> lock(mut_);
   std::for_each(candidates_.begin(), candidates_.end(), [&](PointCandidate& c){
     delete c.first;
     delete c.second;

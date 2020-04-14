@@ -19,17 +19,17 @@
 #include <svo/feature.h>
 #include <svo/point.h>
 #include <svo/config.h>
-#include <boost/bind.hpp>
 #include <vikit/math_utils.h>
 #include <vikit/vision.h>
 #include <vikit/performance_monitor.h>
-#include <fast/fast.h>
+#include <vilib/common/frame.h>
 
 namespace svo {
 
 int Frame::frame_counter_ = 0;
 
-Frame::Frame(vk::AbstractCamera* cam, const cv::Mat& img, double timestamp) :
+Frame::Frame(vk::AbstractCamera* cam, const cv::Mat& img, double timestamp, size_t n_levels) :
+    vilib::Frame(img, timestamp, n_levels),
     id_(frame_counter_++),
     timestamp_(timestamp),
     cam_(cam),
@@ -40,9 +40,12 @@ Frame::Frame(vk::AbstractCamera* cam, const cv::Mat& img, double timestamp) :
   initFrame(img);
 }
 
-Frame::~Frame()
+void Frame::update_features()
 {
-  std::for_each(fts_.begin(), fts_.end(), [&](Feature* i){delete i;});
+    fts_.clear();
+    fts_.resize(num_features_);
+    for (size_t i = 0; i < num_features_; i++)
+        fts_[i] = std::make_unique<Feature>(this, px_vec_.block<2, 1>(0, i), level_vec_[i]);
 }
 
 void Frame::initFrame(const cv::Mat& img)
@@ -55,7 +58,7 @@ void Frame::initFrame(const cv::Mat& img)
   std::for_each(key_pts_.begin(), key_pts_.end(), [&](Feature* ftr){ ftr=NULL; });
 
   // Build Image Pyramid
-  frame_utils::createImgPyramid(img, max(Config::nPyrLevels(), Config::kltMaxLevel()+1), img_pyr_);
+  //frame_utils::createImgPyramid(img, std::max(Config::nPyrLevels(), Config::kltMaxLevel()+1), img_pyr_);
 }
 
 void Frame::setKeyframe()
@@ -66,7 +69,7 @@ void Frame::setKeyframe()
 
 void Frame::addFeature(Feature* ftr)
 {
-  fts_.push_back(ftr);
+  fts_.push_back(std::unique_ptr<Feature>(ftr));
 }
 
 void Frame::setKeyPoints()
@@ -76,7 +79,7 @@ void Frame::setKeyPoints()
       if(key_pts_[i]->point == NULL)
         key_pts_[i] = NULL;
 
-  std::for_each(fts_.begin(), fts_.end(), [&](Feature* ftr){ if(ftr->point != NULL) checkKeyPoints(ftr); });
+  std::for_each(fts_.begin(), fts_.end(), [&](std::unique_ptr<Feature> &ftr){ if(ftr->point != NULL) checkKeyPoints(ftr.get()); });
 }
 
 void Frame::checkKeyPoints(Feature* ftr)
@@ -172,7 +175,7 @@ void createImgPyramid(const cv::Mat& img_level_0, int n_levels, ImgPyr& pyr)
 
 bool getSceneDepth(const Frame& frame, double& depth_mean, double& depth_min)
 {
-  vector<double> depth_vec;
+  std::vector<double> depth_vec;
   depth_vec.reserve(frame.fts_.size());
   depth_min = std::numeric_limits<double>::max();
   for(auto it=frame.fts_.begin(), ite=frame.fts_.end(); it!=ite; ++it)

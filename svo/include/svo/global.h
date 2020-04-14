@@ -26,9 +26,8 @@
 
 #include <Eigen/Core>
 #include <opencv2/opencv.hpp>
-#include <sophus/se3.h>
+#include <sophus/se3.hpp>
 #include <vikit/performance_monitor.h>
-#include <boost/shared_ptr.hpp>
 #include<Eigen/StdVector>
 #ifndef RPG_SVO_VIKIT_IS_VECTOR_SPECIALIZED //Guard for rpg_vikit
 #define RPG_SVO_VIKIT_IS_VECTOR_SPECIALIZED
@@ -95,7 +94,7 @@ namespace svo
 #endif
 
   class Frame;
-  typedef boost::shared_ptr<Frame> FramePtr;
+  typedef std::shared_ptr<Frame> FramePtr;
 } // namespace svo
 
 #endif // SVO_GLOBAL_H_

@@ -23,7 +23,7 @@
 #include <svo/point.h>
 #include <svo/feature.h>
 #include <svo/config.h>
-#include <svo/feature_detection.h>
+#include <vilib/feature_detection/fast/fast_gpu.h>
 #include <svo/pose_optimizer.h>
 #include "test_utils.h"
 
@@ -52,19 +52,22 @@ class PoseOptimizerTest {
     // set pose
     Eigen::Vector3d t_w_ref(0.1131, 0.1131, 2.0000);
     Eigen::Quaterniond q_w_ref(0.0, 0.8227, 0.2149, 0.0);
-    frame_->T_f_w_ = Sophus::SE3(q_w_ref, t_w_ref).inverse();
+    frame_->T_f_w_ = Sophus::SE3d(q_w_ref, t_w_ref).inverse();
 
     // load ground-truth depth
     vk::blender_utils::loadBlenderDepthmap(dataset_dir + "/depth/frame_000002_0.depth", *cam_, depthmap_);
 
     // detect features
-    feature_detection::FastDetector detector(
-        cam_->width(), cam_->height(), Config::gridSize(), Config::nPyrLevels());
-    detector.detect(frame_.get(), frame_->img_pyr_, Config::triangMinCornerScore(), frame_->fts_);
+
+    vilib::FASTGPU detector(
+        cam_->width(), cam_->height(), Config::gridSize(), Config::gridSize(), 0, Config::nPyrLevels(), 0, 0, Config::triangMinCornerScore(), 10, vilib::SUM_OF_ABS_DIFF_ON_ARC);
+
+    detector.detect(frame_->pyramid_);// frame_.get(), frame_->pyramid_, Config::triangMinCornerScore(), frame_->fts_);
+    auto &pts = detector.getPoints();
     size_t n_fts = 0;
-    std::for_each(frame_->fts_.begin(), frame_->fts_.end(), [&](Feature* i){
-      Point* point(new Point(frame_->f2w(i->f*depthmap_.at<float>(i->px[1], i->px[0])), i));
-      i->point = point;
+    std::for_each(pts.begin(), pts.end(), [&](const vilib::DetectorBase::FeaturePoint &fp){
+      //Point* point(new Point(frame_->f2w(i->f*depthmap_.at<float>(fp.y_, fp.x_)), i));
+      //i->point = point;
       ++n_fts;
     });
     printf("Added %zu features to frame.\n", n_fts);
@@ -92,7 +95,7 @@ void PoseOptimizerTest::test(const Vector3d& pose_disturbance, double pixel_sigm
     (*it)->px += Vector2d(vk::Sample::gaussian(pixel_sigma2), vk::Sample::gaussian(pixel_sigma2));
     (*it)->f = frame_->c2f((*it)->px);
   }
-  frame_->T_f_w_ = frame_->T_f_w_*SE3(Matrix3d::Identity(), pose_disturbance);
+  frame_->T_f_w_ = frame_->T_f_w_*SE3d(Matrix3d::Identity(), pose_disturbance);
   double estimated_scale, error_init, error_final;
   size_t num_obs;
   pose_optimizer::optimizeGaussNewton(

@@ -25,35 +25,33 @@
 #include <vikit/abstract_camera.h>
 #include <vikit/atan_camera.h>
 #include <vikit/pinhole_camera.h>
+#include <vilib/feature_detection/detector_base_gpu.h>
 #include <opencv2/opencv.hpp>
-#include <sophus/se3.h>
+#include <sophus/se3.hpp>
 #include <iostream>
 #include "test_utils.h"
+
+using namespace std;
 
 namespace svo {
 
 class BenchmarkNode
 {
-  vk::AbstractCamera* cam_;
-  svo::FrameHandlerMono* vo_;
+  unique_ptr<vk::AbstractCamera> cam_;
+  unique_ptr<svo::FrameHandlerMono> vo_;
+  shared_ptr<vilib::DetectorBaseGPU> detector_;
 
 public:
   BenchmarkNode();
-  ~BenchmarkNode();
   void runFromFolder();
 };
 
 BenchmarkNode::BenchmarkNode()
 {
-  cam_ = new vk::PinholeCamera(752, 480, 315.5, 315.5, 376.0, 240.0);
-  vo_ = new svo::FrameHandlerMono(cam_);
+  cam_ = make_unique<vk::PinholeCamera>(752, 480, 315.5, 315.5, 376.0, 240.0);
+  // TODO: detector_ =
+  vo_ = make_unique<svo::FrameHandlerMono>(cam_.get(), detector_);
   vo_->start();
-}
-
-BenchmarkNode::~BenchmarkNode()
-{
-  delete vo_;
-  delete cam_;
 }
 
 void BenchmarkNode::runFromFolder()

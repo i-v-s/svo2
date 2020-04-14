@@ -20,7 +20,7 @@
 #include <vikit/timer.h>
 #include <vikit/blender_utils.h>
 #include <iostream>
-#include <svo/feature_detection.h>
+#include <vilib/feature_detection/detector_base_gpu.h>
 #include <svo/sparse_img_align.h>
 #include <svo/frame.h>
 #include <svo/point.h>
@@ -40,7 +40,7 @@ class SparseImgAlignTest {
   void testSequence(
       const std::string& dataset_dir,
       const std::string& experiment_name,
-      svo::feature_detection::AbstractDetector* feature_detector);
+      vilib::DetectorBaseGPU* feature_detector);
 
   vk::PinholeCamera* cam_;
   svo::FramePtr frame_ref_;
@@ -57,7 +57,7 @@ SparseImgAlignTest::~SparseImgAlignTest()
 void SparseImgAlignTest::testSequence(
     const std::string& dataset_dir,
     const std::string& experiment_name,
-    svo::feature_detection::AbstractDetector* feature_detector)
+    vilib::DetectorBaseGPU* feature_detector)
 {
   vk::FileReader<vk::blender_utils::file_format::ImageNameAndPose> sequence_file_reader(dataset_dir+"/trajectory.txt");
   std::vector<vk::blender_utils::file_format::ImageNameAndPose> sequence;
@@ -69,7 +69,7 @@ void SparseImgAlignTest::testSequence(
   std::vector<vk::blender_utils::file_format::ImageNameAndPose>::iterator iter = sequence.begin();
   std::list<double> translation_error;
 
-  Sophus::SE3 T_prev_w, T_prevgt_w;
+  Sophus::SE3d T_prev_w, T_prevgt_w;
   std::string trace_dir(svo::test_utils::getTraceDir());
   std::string trace_name(trace_dir + "/sparse_img_align_" + experiment_name + "_trans_estimate.txt");
   std::ofstream ofs(trace_name.c_str());
@@ -83,8 +83,8 @@ void SparseImgAlignTest::testSequence(
     assert(!img.empty());
 
     // load pose
-    Sophus::SE3 T_w_gt(iter->q_, iter->t_);
-    Sophus::SE3 T_gt_w = T_w_gt.inverse(); // ground-truth
+    Sophus::SE3d T_w_gt(iter->q_, iter->t_);
+    Sophus::SE3d T_gt_w = T_w_gt.inverse(); // ground-truth
 
     if(i==0)
     {
@@ -98,12 +98,12 @@ void SparseImgAlignTest::testSequence(
           dataset_dir+"/depth/"+iter->image_name_+"_0.depth", *cam_, depthmap);
 
       // extract features, generate features with 3D points
-      feature_detector->detect(
-          frame_ref_.get(), frame_ref_->img_pyr_, svo::Config::triangMinCornerScore(), frame_ref_->fts_);
-      std::for_each(frame_ref_->fts_.begin(), frame_ref_->fts_.end(), [&](svo::Feature* i) {
+      feature_detector->detect(frame_ref_->pyramid_);
+      //TODO:    frame_ref_.get(), frame_ref_->pyramid_, svo::Config::triangMinCornerScore(), frame_ref_->fts_);
+      std::for_each(frame_ref_->fts_.begin(), frame_ref_->fts_.end(), [&](const std::unique_ptr<svo::Feature> &i) {
         Eigen::Vector3d pt_pos_cur = i->f*depthmap.at<float>(i->px[1], i->px[0]);
         Eigen::Vector3d pt_pos_w = frame_ref_->T_f_w_.inverse()*pt_pos_cur;
-        svo::Point* pt = new svo::Point(pt_pos_w, i);
+        svo::Point* pt = new svo::Point(pt_pos_w, i.get());
         i->point = pt;
       });
 
@@ -124,7 +124,7 @@ void SparseImgAlignTest::testSequence(
     img_align.run(svo::FrameBundle::Ptr(new svo::FrameBundle(std::vector<svo::FramePtr>({frame_ref_}))),
                   svo::FrameBundle::Ptr(new svo::FrameBundle(std::vector<svo::FramePtr>({frame_cur_}))));
     // compute error
-    Sophus::SE3 T_f_gt = frame_cur_->T_f_w_ * T_gt_w.inverse();
+    Sophus::SE3d T_f_gt = frame_cur_->T_f_w_ * T_gt_w.inverse();
     translation_error.push_back(T_f_gt.translation().norm());
     printf("[%3.i] time = %f ms \t |t| = %f \t translation error = %f\n",
            i, t.stop()*1000, (frame_ref_->T_f_w_*T_gt_w.inverse()).translation().norm(),
@@ -157,8 +157,8 @@ int main(int argc, char** argv)
   svo::Config::triangMinCornerScore() = 20;
   svo::Config::kltMinLevel() = 0;
   SparseImgAlignTest test;
-  svo::feature_detection::FastDetector detector(
-      test.cam_->width(), test.cam_->height(), svo::Config::gridSize(), svo::Config::nPyrLevels());
-  test.testSequence(dataset_dir, experiment_name, &detector);
+  //svo::feature_detection::FastDetector detector(
+  //    test.cam_->width(), test.cam_->height(), svo::Config::gridSize(), svo::Config::nPyrLevels());
+  //test.testSequence(dataset_dir, experiment_name, &detector);
   return 0;
 }

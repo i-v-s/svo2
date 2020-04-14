@@ -18,7 +18,7 @@
 #include <svo/global.h>
 #include <svo/config.h>
 #include <svo/frame.h>
-#include <svo/feature_detection.h>
+#include <vilib/feature_detection/fast/fast_gpu.h>
 #include <svo/depth_filter.h>
 #include <svo/feature.h>
 #include <vikit/timer.h>
@@ -45,23 +45,24 @@ void testCornerDetector()
   // Corner detection
   vk::Timer t;
   svo::Features fts;
-  svo::feature_detection::FastDetector fast_detector(
-      img.cols, img.rows, svo::Config::gridSize(), svo::Config::nPyrLevels());
+  vilib::FASTGPU fast_detector(img.cols, img.rows, svo::Config::gridSize(), svo::Config::gridSize(), 0, svo::Config::nPyrLevels(), 0, 0, 10, 10, vilib::SUM_OF_ABS_DIFF_ON_ARC);
+  //svo::feature_detection::FastDetector fast_detector(
+  //    img.cols, img.rows, svo::Config::gridSize(), svo::Config::nPyrLevels());
   for(int i=0; i<100; ++i)
   {
-    fast_detector.detect(frame.get(), frame->img_pyr_, svo::Config::triangMinCornerScore(), fts);
+      fast_detector.detect(frame->pyramid_);
+      // TODO: features!
+      //fast_detector.detect(frame.get(), frame->img_pyr_, svo::Config::triangMinCornerScore(), fts);
   }
   printf("Fast corner detection took %f ms, %zu corners detected (ref i7-W520: 7.166360ms, 40000)\n", t.stop()*10, fts.size());
   printf("Note, in this case, feature detection also contains the cam2world projection of the feature.\n");
   cv::Mat img_rgb = cv::Mat(img.size(), CV_8UC3);
-  cv::cvtColor(img, img_rgb, CV_GRAY2RGB);
-  std::for_each(fts.begin(), fts.end(), [&](svo::Feature* i){
+  cv::cvtColor(img, img_rgb, cv::COLOR_GRAY2RGB);
+  std::for_each(fts.begin(), fts.end(), [&](const std::unique_ptr<svo::Feature> &i){
     cv::circle(img_rgb, cv::Point2f(i->px[0], i->px[1]), 4*(i->level+1), cv::Scalar(0,255,0), 1);
   });
   cv::imshow("ref_img", img_rgb);
   cv::waitKey(0);
-
-  std::for_each(fts.begin(), fts.end(), [&](svo::Feature* i){ delete i; });
 }
 
 } // namespace

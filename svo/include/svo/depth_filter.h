@@ -18,11 +18,11 @@
 #define SVO_DEPTH_FILTER_H_
 
 #include <queue>
-#include <boost/thread.hpp>
-#include <boost/function.hpp>
+#include <thread>
+#include <condition_variable>
 #include <vikit/performance_monitor.h>
 #include <svo/global.h>
-#include <svo/feature_detection.h>
+#include <vilib/feature_detection/detector_base_gpu.h>
 #include <svo/matcher.h>
 
 namespace svo {
@@ -34,20 +34,20 @@ class Point;
 /// A seed is a probabilistic depth estimate for a single pixel.
 struct Seed
 {
-  EIGEN_MAKE_ALIGNED_OPERATOR_NEW
+    EIGEN_MAKE_ALIGNED_OPERATOR_NEW
 
-  static int batch_counter;
-  static int seed_counter;
-  int batch_id;                //!< Batch id is the id of the keyframe for which the seed was created.
-  int id;                      //!< Seed ID, only used for visualization.
-  Feature* ftr;                //!< Feature in the keyframe for which the depth should be computed.
-  float a;                     //!< a of Beta distribution: When high, probability of inlier is large.
-  float b;                     //!< b of Beta distribution: When high, probability of outlier is large.
-  float mu;                    //!< Mean of normal distribution.
-  float z_range;               //!< Max range of the possible depth.
-  float sigma2;                //!< Variance of normal distribution.
-  Matrix2d patch_cov;          //!< Patch covariance in reference image.
-  Seed(Feature* ftr, float depth_mean, float depth_min);
+    static int batch_counter;
+    static int seed_counter;
+    int batch_id;                //!< Batch id is the id of the keyframe for which the seed was created.
+    int id;                      //!< Seed ID, only used for visualization.
+    std::unique_ptr<Feature> ftr;//!< Feature in the keyframe for which the depth should be computed.
+    float a;                     //!< a of Beta distribution: When high, probability of inlier is large.
+    float b;                     //!< b of Beta distribution: When high, probability of outlier is large.
+    float mu;                    //!< Mean of normal distribution.
+    float z_range;               //!< Max range of the possible depth.
+    float sigma2;                //!< Variance of normal distribution.
+    Matrix2d patch_cov;          //!< Patch covariance in reference image.
+    Seed(std::unique_ptr<Feature> ftr, float depth_mean, float depth_min);
 };
 
 /// Depth filter implements the Bayesian Update proposed in:
@@ -61,8 +61,8 @@ class DepthFilter
 public:
   EIGEN_MAKE_ALIGNED_OPERATOR_NEW
 
-  typedef boost::unique_lock<boost::mutex> lock_t;
-  typedef boost::function<void ( Point*, double )> callback_t;
+  typedef std::unique_lock<std::mutex> lock_t;
+  typedef std::function<void ( Point*, double )> callback_t;
 
   /// Depth-filter config parameters
   struct Options
@@ -86,7 +86,7 @@ public:
   } options_;
 
   DepthFilter(
-      feature_detection::DetectorPtr feature_detector,
+      std::shared_ptr<vilib::DetectorBaseGPU> feature_detector,
       callback_t seed_converged_cb);
 
   virtual ~DepthFilter();
@@ -131,21 +131,22 @@ public:
 
   /// Compute the uncertainty of the measurement.
   static double computeTau(
-      const SE3& T_ref_cur,
+      const Sophus::SE3d& T_ref_cur,
       const Vector3d& f,
       const double z,
       const double px_error_angle);
 
 protected:
-  feature_detection::DetectorPtr feature_detector_;
+  std::shared_ptr<vilib::DetectorBaseGPU> feature_detector_;
   callback_t seed_converged_cb_;
   std::list<Seed> seeds_;
-  boost::mutex seeds_mut_;
+  std::mutex seeds_mut_;
   bool seeds_updating_halt_;            //!< Set this value to true when seeds updating should be interrupted.
-  boost::thread* thread_;
+  std::unique_ptr<std::thread> thread_;
+  bool thread_halt_;
   std::queue<FramePtr> frame_queue_;
-  boost::mutex frame_queue_mut_;
-  boost::condition_variable frame_queue_cond_;
+  std::mutex frame_queue_mut_;
+  std::condition_variable frame_queue_cond_;
   FramePtr new_keyframe_;               //!< Next keyframe to extract new seeds.
   std::vector<FramePtr> new_keyframe_update_frames_;
   bool new_keyframe_set_;               //!< Do we have a new keyframe to process?.

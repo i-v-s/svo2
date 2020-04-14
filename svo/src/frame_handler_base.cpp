@@ -17,7 +17,6 @@
 #include <vikit/abstract_camera.h>
 #include <stdlib.h>
 #include <Eigen/StdVector>
-#include <boost/bind.hpp>
 #include <fstream>
 #include <svo/frame_handler_base.h>
 #include <svo/config.h>
@@ -124,7 +123,7 @@ int FrameHandlerBase::finishFrameProcessingCommon(
 #ifdef SVO_TRACE
   g_permon->writeToFile();
   {
-    boost::unique_lock<boost::mutex> lock(map_.point_candidates_.mut_);
+    std::lock_guard<std::mutex> lock(map_.point_candidates_.mut_);
     size_t n_candidates = map_.point_candidates_.candidates_.size();
     SVO_LOG(n_candidates);
   }
@@ -183,15 +182,15 @@ void FrameHandlerBase::optimizeStructure(
     size_t max_n_pts,
     int max_iter)
 {
-  deque<Point*> pts;
+  std::deque<Point*> pts;
   for(Features::iterator it=frame->fts_.begin(); it!=frame->fts_.end(); ++it)
   {
     if((*it)->point != NULL)
       pts.push_back((*it)->point);
   }
-  max_n_pts = min(max_n_pts, pts.size());
+  max_n_pts = std::min(max_n_pts, pts.size());
   nth_element(pts.begin(), pts.begin() + max_n_pts, pts.end(), ptLastOptimComparator);
-  for(deque<Point*>::iterator it=pts.begin(); it!=pts.begin()+max_n_pts; ++it)
+  for(std::deque<Point*>::iterator it=pts.begin(); it!=pts.begin()+max_n_pts; ++it)
   {
     (*it)->optimize(max_iter);
     (*it)->last_structure_optim_ = frame->id_;
@@ -203,7 +202,7 @@ void FrameHandlerBase::optimizeStructure(
     size_t max_n_pts,
     int max_iter)
 {
-  set<Point*> pts_set;
+  std::set<Point*> pts_set;
   for(size_t i=0; i<frames->size(); i++)
   {
     FramePtr frame = frames->at(i);
@@ -213,11 +212,11 @@ void FrameHandlerBase::optimizeStructure(
         pts_set.insert((*it)->point);
     }
   }
-  deque<Point*> pts(pts_set.begin(), pts_set.end());
+  std::deque<Point*> pts(pts_set.begin(), pts_set.end());
 #if 1
-  max_n_pts = min(max_n_pts, pts.size());
+  max_n_pts = std::min(max_n_pts, pts.size());
   nth_element(pts.begin(), pts.begin() + max_n_pts, pts.end(), ptLastOptimComparator);
-  for(deque<Point*>::iterator it=pts.begin(); it!=pts.begin()+max_n_pts; ++it)
+  for(std::deque<Point*>::iterator it=pts.begin(); it!=pts.begin()+max_n_pts; ++it)
 #else
   for(auto it=pts.begin(); it!=pts.end(); ++it)
 #endif  

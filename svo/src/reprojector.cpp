@@ -22,13 +22,13 @@
 #include <svo/feature.h>
 #include <svo/map.h>
 #include <svo/config.h>
-#include <boost/bind.hpp>
-#include <boost/thread.hpp>
 #include <vikit/abstract_camera.h>
 #include <vikit/math_utils.h>
 #include <vikit/timer.h>
 
 namespace svo {
+
+using namespace std;
 
 Reprojector::Reprojector(vk::AbstractCamera* cam, Map& map) :
     map_(map)
@@ -69,12 +69,15 @@ void Reprojector::reprojectMap(
 
   // Identify those Keyframes which share a common field of view.
   SVO_START_TIMER("reproject_kfs");
-  list< pair<FramePtr,double> > close_kfs;
+  vector< pair<FramePtr,double> > close_kfs;
   map_.getCloseKeyframes(frame, close_kfs);
 
   // Sort KFs with overlap according to their closeness
-  close_kfs.sort(boost::bind(&std::pair<FramePtr, double>::second, _1) <
-                 boost::bind(&std::pair<FramePtr, double>::second, _2));
+  sort(close_kfs.begin(), close_kfs.end(), [](const std::pair<FramePtr, double> &a, const std::pair<FramePtr, double> &b){
+      return a.second < b.second;
+  });
+  //close_kfs.sort(boost::bind(&std::pair<FramePtr, double>::second, _1) <
+  //               boost::bind(&std::pair<FramePtr, double>::second, _2));
 
   // Reproject all mappoints of the closest N kfs with overlap. We only store
   // in which grid cell the points fall.
@@ -107,7 +110,7 @@ void Reprojector::reprojectMap(
   // Now project all point candidates
   SVO_START_TIMER("reproject_candidates");
   {
-    boost::unique_lock<boost::mutex> lock(map_.point_candidates_.mut_);
+    std::lock_guard<std::mutex> lock(map_.point_candidates_.mut_);
     auto it=map_.point_candidates_.candidates_.begin();
     while(it!=map_.point_candidates_.candidates_.end())
     {
@@ -141,67 +144,65 @@ void Reprojector::reprojectMap(
   SVO_STOP_TIMER("feature_align");
 }
 
-bool Reprojector::pointQualityComparator(Candidate& lhs, Candidate& rhs)
+bool Reprojector::pointQualityComparator(const Candidate& lhs, const Candidate &rhs)
 {
-  if(lhs.pt->type_ > rhs.pt->type_)
-    return true;
-  return false;
+  return lhs.pt->type_ > rhs.pt->type_;
 }
 
 bool Reprojector::reprojectCell(Cell& cell, FramePtr frame)
 {
-  cell.sort(boost::bind(&Reprojector::pointQualityComparator, _1, _2));
-  Cell::iterator it=cell.begin();
-  while(it!=cell.end())
-  {
-    ++n_trials_;
-
-    if(it->pt->type_ == Point::TYPE_DELETED)
+    cell.sort(&Reprojector::pointQualityComparator);
+    Cell::iterator it=cell.begin();
+    while(it!=cell.end())
     {
-      it = cell.erase(it);
-      continue;
+        ++n_trials_;
+
+        if(it->pt->type_ == Point::TYPE_DELETED)
+        {
+            it = cell.erase(it);
+            continue;
+        }
+
+        //feature alignment
+        bool found_match = true;
+        if(options_.find_match_direct)
+            found_match = matcher_.findMatchDirect(*it->pt, *frame, it->px);
+        if(!found_match)
+        {
+            it->pt->n_failed_reproj_++;
+            if(it->pt->type_ == Point::TYPE_UNKNOWN && it->pt->n_failed_reproj_ > 15)
+                map_.safeDeletePoint(it->pt);
+            if(it->pt->type_ == Point::TYPE_CANDIDATE  && it->pt->n_failed_reproj_ > 30)
+                map_.point_candidates_.deleteCandidatePoint(it->pt);
+            it = cell.erase(it);
+            continue;
+        }
+        it->pt->n_succeeded_reproj_++;
+        if(it->pt->type_ == Point::TYPE_UNKNOWN && it->pt->n_succeeded_reproj_ > 10)
+            it->pt->type_ = Point::TYPE_GOOD;
+
+        Feature* new_feature = new Feature(frame.get(), it->px, matcher_.search_level_);
+        frame->addFeature(new_feature);
+
+        // Here we add a reference in the feature to the 3D point, the other way
+        // round is only done if this frame is selected as keyframe.
+        new_feature->point = it->pt;
+
+        if(matcher_.ref_ftr_->type == Feature::EDGELET)
+        {
+            new_feature->type = Feature::EDGELET;
+            new_feature->grad = matcher_.A_cur_ref_*matcher_.ref_ftr_->grad;
+            new_feature->grad.normalize();
+        }
+
+        // If the keyframe is selected and we reproject the rest, we don't have to
+        // check this point anymore.
+        it = cell.erase(it);
+
+        // Maximum one point per cell.
+        return true;
     }
-
-    //feature alignment
-    bool found_match = true;
-    if(options_.find_match_direct)
-      found_match = matcher_.findMatchDirect(*it->pt, *frame, it->px);
-    if(!found_match)
-    {
-      it->pt->n_failed_reproj_++;
-      if(it->pt->type_ == Point::TYPE_UNKNOWN && it->pt->n_failed_reproj_ > 15)
-        map_.safeDeletePoint(it->pt);
-      if(it->pt->type_ == Point::TYPE_CANDIDATE  && it->pt->n_failed_reproj_ > 30)
-        map_.point_candidates_.deleteCandidatePoint(it->pt);
-      it = cell.erase(it);
-      continue;
-    }
-    it->pt->n_succeeded_reproj_++;
-    if(it->pt->type_ == Point::TYPE_UNKNOWN && it->pt->n_succeeded_reproj_ > 10)
-      it->pt->type_ = Point::TYPE_GOOD;
-
-    Feature* new_feature = new Feature(frame.get(), it->px, matcher_.search_level_);
-    frame->addFeature(new_feature);
-
-    // Here we add a reference in the feature to the 3D point, the other way
-    // round is only done if this frame is selected as keyframe.
-    new_feature->point = it->pt;
-
-    if(matcher_.ref_ftr_->type == Feature::EDGELET)
-    {
-      new_feature->type = Feature::EDGELET;
-      new_feature->grad = matcher_.A_cur_ref_*matcher_.ref_ftr_->grad;
-      new_feature->grad.normalize();
-    }
-
-    // If the keyframe is selected and we reproject the rest, we don't have to
-    // check this point anymore.
-    it = cell.erase(it);
-
-    // Maximum one point per cell.
-    return true;
-  }
-  return false;
+    return false;
 }
 
 bool Reprojector::reprojectPoint(FramePtr frame, Point* point)

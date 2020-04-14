@@ -18,6 +18,7 @@
 #define SVO_MATCHER_H_
 
 #include <svo/global.h>
+#include <vilib/storage/subframe.h>
 
 namespace vk {
   class AbstractCamera;
@@ -41,7 +42,7 @@ void getWarpMatrixAffine(
     const Vector2d& px_ref,
     const Vector3d& f_ref,
     const double depth_ref,
-    const SE3& T_cur_ref,
+    const SE3d& T_cur_ref,
     const int level_ref,
     Matrix2d& A_cur_ref);
 
@@ -58,7 +59,17 @@ void warpAffine(
     const int halfpatch_size,
     uint8_t* patch);
 
+void warpAffine(
+    const Matrix2d& A_cur_ref,
+    const vilib::Subframe *img_ref,
+    const Vector2d& px_ref,
+    const int level_ref,
+    const int level_cur,
+    const int halfpatch_size,
+    uint8_t* patch);
+
 } // namespace warp
+
 
 /// Patch-matcher for reprojection-matching and epipolar search in triangulation.
 class Matcher

@@ -36,7 +36,7 @@ void getWarpMatrixAffine(
     const Vector2d& px_ref,
     const Vector3d& f_ref,
     const double depth_ref,
-    const SE3& T_cur_ref,
+    const SE3d& T_cur_ref,
     const int level_ref,
     Matrix2d& A_cur_ref)
 {
@@ -78,7 +78,7 @@ void warpAffine(
     const int halfpatch_size,
     uint8_t* patch)
 {
-  const int patch_size = halfpatch_size*2 ;
+  const int patch_size = halfpatch_size * 2 ;
   const Matrix2f A_ref_cur = A_cur_ref.inverse().cast<float>();
   if(isnan(A_ref_cur(0,0)))
   {
@@ -88,15 +88,15 @@ void warpAffine(
 
   // Perform the warp on a larger patch.
   uint8_t* patch_ptr = patch;
-  const Vector2f px_ref_pyr = px_ref.cast<float>() / (1<<level_ref);
-  for (int y=0; y<patch_size; ++y)
+  const Vector2f px_ref_pyr = px_ref.cast<float>() / (1 << level_ref);
+  for (int y=0; y < patch_size; ++y)
   {
-    for (int x=0; x<patch_size; ++x, ++patch_ptr)
+    for (int x = 0; x < patch_size; ++x, ++patch_ptr)
     {
-      Vector2f px_patch(x-halfpatch_size, y-halfpatch_size);
-      px_patch *= (1<<search_level);
+      Vector2f px_patch(x - halfpatch_size, y - halfpatch_size);
+      px_patch *= (1 << search_level);
       const Vector2f px(A_ref_cur*px_patch + px_ref_pyr);
-      if (px[0]<0 || px[1]<0 || px[0]>=img_ref.cols-1 || px[1]>=img_ref.rows-1)
+      if (px[0] < 0 || px[1] < 0 || px[0] >= img_ref.cols - 1 || px[1] >= img_ref.rows - 1)
         *patch_ptr = 0;
       else
         *patch_ptr = (uint8_t) vk::interpolateMat_8u(img_ref, px[0], px[1]);
@@ -104,15 +104,29 @@ void warpAffine(
   }
 }
 
+void warpAffine(const Matrix2d &A_cur_ref,
+                const vilib::Subframe *img_ref,
+                const Vector2d &px_ref,
+                const int level_ref,
+                const int level_cur,
+                const int halfpatch_size,
+                uint8_t *patch)
+{
+    cv::Mat img;
+    img_ref->copy_to(img);
+    warpAffine(A_cur_ref, img, px_ref, level_ref, level_cur, halfpatch_size, patch);
+}
+
+
 } // namespace warp
 
 bool depthFromTriangulation(
-    const SE3& T_search_ref,
+    const SE3d& T_search_ref,
     const Vector3d& f_ref,
     const Vector3d& f_cur,
     double& depth)
 {
-  Matrix<double,3,2> A; A << T_search_ref.rotation_matrix() * f_ref, f_cur;
+  Eigen::Matrix<double,3,2> A; A << T_search_ref.rotationMatrix() * f_ref, f_cur;
   const Matrix2d AtA = A.transpose()*A;
   if(AtA.determinant() < 0.000001)
     return false;
@@ -150,7 +164,7 @@ bool Matcher::findMatchDirect(
       (ref_ftr_->frame->pos() - pt.pos_).norm(),
       cur_frame.T_f_w_ * ref_ftr_->frame->T_f_w_.inverse(), ref_ftr_->level, A_cur_ref_);
   search_level_ = warp::getBestSearchLevel(A_cur_ref_, Config::nPyrLevels()-1);
-  warp::warpAffine(A_cur_ref_, ref_ftr_->frame->img_pyr_[ref_ftr_->level], ref_ftr_->px,
+  warp::warpAffine(A_cur_ref_, ref_ftr_->frame->pyramid_[ref_ftr_->level].get(), ref_ftr_->px,
                    ref_ftr_->level, search_level_, halfpatch_size_+1, patch_with_border_);
   createPatchFromPatchWithBorder();
 
@@ -163,13 +177,13 @@ bool Matcher::findMatchDirect(
     Vector2d dir_cur(A_cur_ref_*ref_ftr_->grad);
     dir_cur.normalize();
     success = feature_alignment::align1D(
-          cur_frame.img_pyr_[search_level_], dir_cur.cast<float>(),
+          *cur_frame.pyramid_[search_level_], dir_cur.cast<float>(),
           patch_with_border_, patch_, options_.align_max_iter, px_scaled, h_inv_);
   }
   else
   {
     success = feature_alignment::align2D(
-      cur_frame.img_pyr_[search_level_], patch_with_border_, patch_,
+      *cur_frame.pyramid_[search_level_], patch_with_border_, patch_,
       options_.align_max_iter, px_scaled);
   }
   px_cur = px_scaled * (1<<search_level_);
@@ -219,7 +233,7 @@ bool Matcher::findEpipolarMatchDirect(
   epi_length_ = (px_A-px_B).norm() / (1<<search_level_);
 
   // Warp reference patch at ref_level
-  warp::warpAffine(A_cur_ref_, ref_frame.img_pyr_[ref_ftr.level], ref_ftr.px,
+  warp::warpAffine(A_cur_ref_, *ref_frame.pyramid_[ref_ftr.level], ref_ftr.px,
                    ref_ftr.level, search_level_, halfpatch_size_+1, patch_with_border_);
   createPatchFromPatchWithBorder();
 
@@ -230,11 +244,11 @@ bool Matcher::findEpipolarMatchDirect(
     bool res;
     if(options_.align_1d)
       res = feature_alignment::align1D(
-          cur_frame.img_pyr_[search_level_], (px_A-px_B).cast<float>().normalized(),
+          *cur_frame.pyramid_[search_level_], (px_A-px_B).cast<float>().normalized(),
           patch_with_border_, patch_, options_.align_max_iter, px_scaled, h_inv_);
     else
       res = feature_alignment::align2D(
-          cur_frame.img_pyr_[search_level_], patch_with_border_, patch_,
+          *cur_frame.pyramid_[search_level_], patch_with_border_, patch_,
           options_.align_max_iter, px_scaled);
     if(res)
     {
@@ -279,10 +293,11 @@ bool Matcher::findEpipolarMatchDirect(
       continue;
 
     // TODO interpolation would probably be a good idea
-    uint8_t* cur_patch_ptr = cur_frame.img_pyr_[search_level_].data
-                             + (pxi[1]-halfpatch_size_)*cur_frame.img_pyr_[search_level_].cols
-                             + (pxi[0]-halfpatch_size_);
-    int zmssd = patch_score.computeScore(cur_patch_ptr, cur_frame.img_pyr_[search_level_].cols);
+    cv::Mat img = *cur_frame.pyramid_[search_level_];
+    uint8_t* cur_patch_ptr = img.data
+                             + (pxi[1] - halfpatch_size_) * img.cols
+                             + (pxi[0] - halfpatch_size_);
+    int zmssd = patch_score.computeScore(cur_patch_ptr, img.cols);
 
     if(zmssd < zmssd_best) {
       zmssd_best = zmssd;
@@ -299,11 +314,11 @@ bool Matcher::findEpipolarMatchDirect(
       bool res;
       if(options_.align_1d)
         res = feature_alignment::align1D(
-            cur_frame.img_pyr_[search_level_], (px_A-px_B).cast<float>().normalized(),
+            *cur_frame.pyramid_[search_level_], (px_A-px_B).cast<float>().normalized(),
             patch_with_border_, patch_, options_.align_max_iter, px_scaled, h_inv_);
       else
         res = feature_alignment::align2D(
-            cur_frame.img_pyr_[search_level_], patch_with_border_, patch_,
+            *cur_frame.pyramid_[search_level_], patch_with_border_, patch_,
             options_.align_max_iter, px_scaled);
       if(res)
       {

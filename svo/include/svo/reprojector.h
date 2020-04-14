@@ -79,7 +79,7 @@ private:
   struct Grid
   {
     CandidateGrid cells;
-    vector<int> cell_order;
+    std::vector<int> cell_order;
     int cell_size;
     int grid_n_cols;
     int grid_n_rows;
@@ -89,7 +89,7 @@ private:
   Matcher matcher_;
   Map& map_;
 
-  static bool pointQualityComparator(Candidate& lhs, Candidate& rhs);
+  static bool pointQualityComparator(const Candidate &lhs, const Candidate& rhs);
   void initializeGrid(vk::AbstractCamera* cam);
   void resetGrid();
   bool reprojectCell(Cell& cell, FramePtr frame);

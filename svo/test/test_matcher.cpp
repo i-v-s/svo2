@@ -53,8 +53,8 @@ class MatcherTest {
     Eigen::Vector3d t_w_cur(0.5673, 0.5641, 2.0000);
     Eigen::Quaterniond q_w_ref(0.0, 0.8227, 0.2149, 0.0);
     Eigen::Quaterniond q_w_cur(0.0, 0.8235, 0.2130, 0.0);
-    frame_ref_->T_f_w_ = Sophus::SE3(q_w_ref, t_w_ref).inverse();
-    frame_cur_->T_f_w_ = Sophus::SE3(q_w_cur, t_w_cur).inverse();
+    frame_ref_->T_f_w_ = Sophus::SE3d(q_w_ref, t_w_ref).inverse();
+    frame_cur_->T_f_w_ = Sophus::SE3d(q_w_cur, t_w_cur).inverse();
 
     // load ground-truth depth
     vk::blender_utils::loadBlenderDepthmap(dataset_dir+"/depth/frame_000002_0.depth", *cam_, depth_ref_);
@@ -152,7 +152,7 @@ void MatcherTest::testWarpAffine()
   svo::Matcher matcher;
   double depth = 1.0;
 
-  Sophus::SE3 T_cur_ref(frame_cur_->T_f_w_*frame_ref_->T_f_w_.inverse());
+  Sophus::SE3d T_cur_ref(frame_cur_->T_f_w_*frame_ref_->T_f_w_.inverse());
   Eigen::Vector2d px_cur(frame_cur_->cam_->world2cam(T_cur_ref*(ref_ftr_->f*depth)));
 
   // compute reference patch
@@ -164,28 +164,30 @@ void MatcherTest::testWarpAffine()
       *cam_, *cam_, ref_ftr_->px, ref_ftr_->f, 1.0, T_cur_ref, ref_ftr_->level, A_cur_ref);
   int level_cur = svo::warp::getBestSearchLevel(A_cur_ref, svo::Config::nPyrLevels()-1);
   svo::warp::warpAffine(
-      A_cur_ref, ref_ftr_->frame->img_pyr_[ref_ftr_->level], ref_ftr_->px,
+      A_cur_ref, *ref_ftr_->frame->pyramid_[ref_ftr_->level], ref_ftr_->px,
       ref_ftr_->level, level_cur, matcher.halfpatch_size_+1, matcher.patch_with_border_);
 
   // copy current patch
   Eigen::Vector2i pxi(px_cur[0]/(1<<level_cur)+0.5, px_cur[1]/(1<<level_cur)+0.5);
   cv::Mat cur_patch(patch_size, patch_size, CV_8U);
-  frame_cur_->img_pyr_.at(level_cur)(cv::Range(pxi[1]-halfpatch_size,
+  cv::Mat frame_cur = *frame_cur_->pyramid_.at(level_cur);
+  frame_cur(cv::Range(pxi[1]-halfpatch_size,
                                                pxi[1]+halfpatch_size),
                                      cv::Range(pxi[0]-halfpatch_size,
                                                pxi[0]+halfpatch_size)).copyTo(cur_patch);
 
   // display results
-  cv::circle(frame_cur_->img_pyr_[level_cur],
+  cv::circle(frame_cur,
              cv::Point2f(pxi[0], pxi[1]),
              patch_size, cv::Scalar(255), 2);
-  cv::circle(frame_ref_->img_pyr_[ref_ftr_->level],
+  cv::Mat frame_ref = *frame_ref_->pyramid_[ref_ftr_->level];
+  cv::circle(frame_ref,
               cv::Point2f(ref_ftr_->px[0]/(1<<ref_ftr_->level), ref_ftr_->px[1]/(1<<ref_ftr_->level)),
               patch_size, cv::Scalar(255), 2);
   cv::imshow("cur_patch", cur_patch);
   cv::imshow("ref_patch", ref_patch);
-  cv::imshow("ref_img", frame_ref_->img_pyr_[ref_ftr_->level]);
-  cv::imshow("cur_img", frame_cur_->img_pyr_[level_cur]);
+  cv::imshow("ref_img", frame_ref);
+  cv::imshow("cur_img", frame_cur);
   cv::waitKey(0);
 }
 

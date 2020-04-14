@@ -3,14 +3,13 @@
 
 SET(TRACE TRUE)
 SET(HAVE_G2O FALSE) 
-SET(USE_ROS TRUE) # Set FALSE if you want to build this package without Catkin
+OPTION(USE_ROS "" FALSE) # Set FALSE if you want to build this package without Catkin
 SET(DEBUG_OUTPUT FALSE) # Only relevant if build without ROS
 
 ################################################################################
 
-SET(PROJECT_NAME svo)
-PROJECT(${PROJECT_NAME})
-CMAKE_MINIMUM_REQUIRED (VERSION 2.8.3)
+PROJECT(svo)
+cmake_minimum_required(VERSION 3.10 FATAL_ERROR)
 SET(CMAKE_BUILD_TYPE Release) # Release, RelWithDebInfo
 SET(CMAKE_VERBOSE_MAKEFILE OFF)
 SET(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${PROJECT_SOURCE_DIR}/CMakeModules/")
@@ -37,21 +36,16 @@ IF(DEFINED ENV{ARM_ARCHITECTURE})
 ELSE()
   SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -mmmx -msse -msse -msse2 -msse3 -mssse3")
 ENDIF()
-IF(CMAKE_COMPILER_IS_GNUCC)
-  SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++0x")
-ELSE()
-  SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11")
-ENDIF()
+
 SET(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS} -O3 -fsee -fomit-frame-pointer -fno-signed-zeros -fno-math-errno -funroll-loops")
 
 # Add plain cmake packages 
 FIND_PACKAGE(OpenCV REQUIRED)
-FIND_PACKAGE(Eigen REQUIRED)
+FIND_PACKAGE(Eigen3 REQUIRED)
 FIND_PACKAGE(Sophus REQUIRED)
-FIND_PACKAGE(fast REQUIRED)
-FIND_PACKAGE(Boost REQUIRED COMPONENTS thread system)
+FIND_PACKAGE(vilib REQUIRED)
 
-IF(USE_ROS)
+if(USE_ROS)
   FIND_PACKAGE(catkin REQUIRED COMPONENTS roscpp roslib cmake_modules vikit_common vikit_ros)
   catkin_package(
       DEPENDS Eigen OpenCV Sophus Boost fast
@@ -59,41 +53,27 @@ IF(USE_ROS)
       INCLUDE_DIRS include
       LIBRARIES svo
   )
-ELSE()
-  FIND_PACKAGE(vikit_common REQUIRED)
-  SET(EXECUTABLE_OUTPUT_PATH ${PROJECT_SOURCE_DIR}/bin)
-  SET(LIBRARY_OUTPUT_PATH ${PROJECT_SOURCE_DIR}/lib)
-ENDIF()
-
-# Include dirs
-INCLUDE_DIRECTORIES(
-  include
-  ${Eigen_INCLUDE_DIRS}
-  ${OpenCV_INCLUDE_DIRS}
-  ${Sophus_INCLUDE_DIRS}
-  ${Boost_INCLUDE_DIRS}
-  ${fast_INCLUDE_DIRS}
-)
+else()
+  find_package(vikit_common REQUIRED)
+endif()
 
 # Set link libraries
 LIST(APPEND LINK_LIBS 
   ${OpenCV_LIBS}
-  ${Sophus_LIBRARIES}
-  ${Boost_LIBRARIES}
-  ${fast_LIBRARIES}
+  Sophus::Sophus
+  vilib::vilib
 )
 
 IF(USE_ROS)
   INCLUDE_DIRECTORIES(${catkin_INCLUDE_DIRS})
   LIST(APPEND LINK_LIBS ${catkin_LIBRARIES})
 ELSE()
-  INCLUDE_DIRECTORIES(${vikit_common_INCLUDE_DIRS})
-  LIST(APPEND LINK_LIBS ${vikit_common_LIBRARIES})
+  LIST(APPEND LINK_LIBS vikit::vikit_common)
 ENDIF()
 
 # Set sourcefiles
 LIST(APPEND SOURCEFILES
-  src/frame_handler_stereo.cpp
+  #src/frame_handler_stereo.cpp
   src/frame_handler_mono.cpp
   src/frame_handler_base.cpp
   src/frame.cpp
@@ -104,7 +84,7 @@ LIST(APPEND SOURCEFILES
   src/matcher.cpp
   src/reprojector.cpp
   src/feature_alignment.cpp
-  src/feature_detection.cpp
+  #src/feature_detection.cpp
   src/depth_filter.cpp
   src/config.cpp
   src/sparse_img_align.cpp)
@@ -124,8 +104,21 @@ IF(HAVE_G2O)
 ENDIF(HAVE_G2O)
 
 # Create svo library
-ADD_LIBRARY(svo SHARED ${SOURCEFILES})
-TARGET_LINK_LIBRARIES(svo ${LINK_LIBS})
+add_library(svo SHARED ${SOURCEFILES})
+
+set_target_properties(svo PROPERTIES
+    CXX_STANDARD 17
+    CXX_EXTENSIONS OFF
+)
+
+
+target_link_libraries(svo
+    ${LINK_LIBS}
+)
+
+target_include_directories(svo
+    PUBLIC include
+)
 
 ################################################################################
 # TESTS

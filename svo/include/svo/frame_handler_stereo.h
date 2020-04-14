@@ -43,15 +43,14 @@ public:
   FrameBundlePtr lastFrames() { return last_frames_; }
 
   /// Get the set of spatially closest keyframes of the last frame.
-  const set<FramePtr>& coreKeyframes() { return core_kfs_; }
+  const std::set<FramePtr>& coreKeyframes() { return core_kfs_; }
 
   /// Access the depth filter.
   DepthFilter* depthFilter() const { return depth_filter_; }
 
   /// An external place recognition module may know where to relocalize.
-  bool relocalizeFrameAtPose(
-      const int keyframe_id,
-      const SE3& T_kf_f,
+  bool relocalizeFrameAtPose(const int keyframe_id,
+      const SE3d &T_kf_f,
       const cv::Mat& img,
       const double timestamp);
 
@@ -60,14 +59,16 @@ protected:
   Reprojector reprojector_;                     //!< Projects points from other keyframes into the current frame
   FrameBundlePtr new_frames_;                   //!< Current frame.
   FrameBundlePtr last_frames_;                  //!< Last frame, not necessarily a keyframe.
-  set<FramePtr> core_kfs_;                      //!< Keyframes in the closer neighbourhood.
-  vector< pair<FramePtr,size_t> > overlap_kfs_; //!< All keyframes with overlapping field of view. the paired number specifies how many common mappoints are observed TODO: why vector!?
+  std::set<FramePtr> core_kfs_;                      //!< Keyframes in the closer neighbourhood.
+  std::vector<std::pair<FramePtr,size_t> > overlap_kfs_; //!< All keyframes with overlapping field of view. the paired number specifies how many common mappoints are observed TODO: why vector!?
   DepthFilter* depth_filter_;                   //!< Depth estimation algorithm runs in a parallel thread and is used to initialize new 3D points.
 
   FrameBundlePtr last_keyframes_;               //!< Last keyframes, used at keyframe selection.
   std::deque<FrameBundlePtr> history_frames_;   //!< history frames, used at depth filter.
 
-  Sophus::SE3 last_imu_pose_;                   //!< Last pose before lost, after reset use this pose to init first pose.
+  Sophus::SE3d last_imu_pose_;                   //!< Last pose before lost, after reset use this pose to init first pose.
+
+  initialization::KltHomographyInit initializer;
 
   /// Initialize the visual odometry algorithm.
   virtual void initialize();
@@ -80,7 +81,7 @@ protected:
 
   /// Try relocalizing the frame at relative position to provided keyframe.
   virtual UpdateResult relocalizeFrame(
-      const SE3& T_cur_ref,
+      const SE3d& T_cur_ref,
       FramePtr ref_keyframe);
 
   /// Reset the frame handler. Implement in derived class.
@@ -90,6 +91,7 @@ protected:
   virtual bool needNewKf(double scene_depth_mean);
 
   void setCoreKfs(size_t n_closest);
+
 };
 
 } // namespace svo

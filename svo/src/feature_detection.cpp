@@ -16,11 +16,13 @@
 
 #include <svo/feature_detection.h>
 #include <svo/feature.h>
-#include <fast/fast.h>
+//#include <fast/fast.h>
 #include <vikit/vision.h>
 
 namespace svo {
 namespace feature_detection {
+
+using namespace std;
 
 AbstractDetector::AbstractDetector(
     const int img_width,

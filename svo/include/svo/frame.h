@@ -17,11 +17,12 @@
 #ifndef SVO_FRAME_H_
 #define SVO_FRAME_H_
 
-#include <sophus/se3.h>
+#include <sophus/se3.hpp>
 #include <vikit/math_utils.h>
 #include <vikit/abstract_camera.h>
-#include <boost/noncopyable.hpp>
 #include <svo/global.h>
+#include <vilib/common/frame.h>
+
 
 namespace g2o {
 class VertexSE3Expmap;
@@ -33,11 +34,11 @@ namespace svo {
 class Point;
 struct Feature;
 
-typedef list<Feature*> Features;
-typedef vector<cv::Mat> ImgPyr;
+typedef std::vector<std::unique_ptr<Feature>> Features;
+typedef std::vector<cv::Mat> ImgPyr;
 
 /// A frame saves the image, the associated features and the estimated pose.
-class Frame : boost::noncopyable
+class Frame : public vilib::Frame // boost::noncopyable
 {
 public:
   EIGEN_MAKE_ALIGNED_OPERATOR_NEW
@@ -46,20 +47,21 @@ public:
   int                           id_;                    //!< Unique id of the frame.
   double                        timestamp_;             //!< Timestamp of when the image was recorded.
   vk::AbstractCamera*           cam_;                   //!< Camera model.
-  Sophus::SE3                   T_f_w_;                 //!< Transform (f)rame from (w)orld.
-  Matrix<double, 6, 6>          Cov_;                   //!< Covariance.
-  ImgPyr                        img_pyr_;               //!< Image Pyramid.
+  Sophus::SE3d                  T_f_w_;                 //!< Transform (f)rame from (w)orld.
+  Eigen::Matrix<double, 6, 6>   Cov_;                   //!< Covariance.
+  //ImgPyr                        img_pyr_;               //!< Image Pyramid.
   Features                      fts_;                   //!< List of features in the image.
-  vector<Feature*>              key_pts_;               //!< Five features and associated 3D points which are used to detect if two frames have overlapping field of view.
+  std::vector<Feature*>         key_pts_;               //!< Five features and associated 3D points which are used to detect if two frames have overlapping field of view.
   bool                          is_keyframe_;           //!< Was this frames selected as keyframe?
   g2oFrameSE3*                  v_kf_;                  //!< Temporary pointer to the g2o node object of the keyframe.
   int                           last_published_ts_;     //!< Timestamp of last publishing.
 
-  Sophus::SE3 T_body_cam_;
-  Sophus::SE3 T_cam_body_;
+  Sophus::SE3d T_body_cam_;
+  Sophus::SE3d T_cam_body_;
 
-  Frame(vk::AbstractCamera* cam, const cv::Mat& img, double timestamp);
-  ~Frame();
+  Frame(vk::AbstractCamera* cam, const cv::Mat& img, double timestamp, size_t n_levels = 4);
+
+  void update_features();
 
   /// Initialize new frame and create image pyramid.
   void initFrame(const cv::Mat& img);
@@ -82,37 +84,37 @@ public:
   void removeKeyPoint(Feature* ftr);
 
   /// Return number of point observations.
-  inline size_t nObs() const { return fts_.size(); }
+  inline size_t nObs() const { return num_features_; }// fts_.size(); }
 
   /// Check if a point in (w)orld coordinate frame is visible in the image.
   bool isVisible(const Vector3d& xyz_w) const;
 
   /// Full resolution image stored in the frame.
-  inline const cv::Mat& img() const { return img_pyr_[0]; }
+  //inline const cv::Mat& img() const { return pyramid_[0]; }
 
   /// Was this frame selected as keyframe?
   inline bool isKeyframe() const { return is_keyframe_; }
 
   /// Get camera pose in imu frame.
-  inline const Sophus::SE3& T_imu_cam() const { return T_body_cam_; }
+  inline const Sophus::SE3d& T_imu_cam() const { return T_body_cam_; }
 
   /// Get imu pose in camera frame.
-  inline const Sophus::SE3& T_cam_imu() const { return T_cam_body_; }
+  inline const Sophus::SE3d& T_cam_imu() const { return T_cam_body_; }
 
   /// Get pose of world origin in frame coordinates.
-  inline const Sophus::SE3& T_cam_world() const { return T_f_w_; }
+  inline const Sophus::SE3d& T_cam_world() const { return T_f_w_; }
 
   /// Get pose of the cam in world coordinates.
-  inline Sophus::SE3 T_world_cam() const { return T_f_w_.inverse(); }
+  inline Sophus::SE3d T_world_cam() const { return T_f_w_.inverse(); }
 
   /// Get pose of imu in world coordinates.
-  inline Sophus::SE3 T_world_imu() const { return (T_imu_cam()*T_f_w_).inverse(); }
+  inline Sophus::SE3d T_world_imu() const { return (T_imu_cam()*T_f_w_).inverse(); }
 
   /// Get pose of world-origin in IMU coordinates.
-  inline Sophus::SE3 T_imu_world() const { return T_imu_cam()*T_f_w_; }
+  inline Sophus::SE3d T_imu_world() const { return T_imu_cam()*T_f_w_; }
 
   /// Set camera to imu transformation.
-  inline void set_T_cam_body(const Sophus::SE3& T_cam_imu)
+  inline void set_T_cam_body(const Sophus::SE3d& T_cam_imu)
   {
     T_cam_body_ = T_cam_imu;
     T_body_cam_ = T_cam_imu.inverse();
@@ -155,7 +157,7 @@ public:
   //u_hat对李代数xi的导数，默认u_hat在normalize平面，f为1
   inline static void jacobian_xyz2uv(
       const Vector3d& xyz_in_f,
-      Matrix<double,2,6>& J)
+      Eigen::Matrix<double, 2, 6>& J)
   {
     const double x = xyz_in_f[0];
     const double y = xyz_in_f[1];
@@ -179,7 +181,7 @@ public:
 
   /// Jacobian of reprojection error (on unit plane) w.r.t. IMU pose.
   inline static void jacobian_xyz2uv_imu(
-      const Sophus::SE3& T_cam_imu,
+      const Sophus::SE3d& T_cam_imu,
       const Eigen::Vector3d& p_in_imu,
       Eigen::Matrix<double,2,6>& J)
   {
@@ -194,12 +196,12 @@ public:
         0, 1, -p_in_cam[1]/p_in_cam[2];
 
     // J=d_u_hat/d_xi = d_u_hat/d_cam * d_cam/d_imu * d_imu/d_xi
-    J = (- 1.0/p_in_cam[2] * J_proj) * T_cam_imu.rotation_matrix() * G_x;
+    J = (- 1.0/p_in_cam[2] * J_proj) * T_cam_imu.rotationMatrix() * G_x;
   }
 
   /// Jacobian of reprojection error (on image plane, has focal length) w.r.t. IMU pose.
   inline static void jacobian_xyz2img_imu(
-      const Sophus::SE3& T_cam_imu,
+      const Sophus::SE3d& T_cam_imu,
       const Eigen::Vector3d& p_in_imu,
       const Eigen::Matrix<double, 2, 3>& J_cam,
       Eigen::Matrix<double,2,6>& J)
@@ -209,12 +211,12 @@ public:
     G_x.block<3,3>(0,3) = -skew(p_in_imu);
 
     // J=d_u/d_xi = d_u/d_cam * d_cam/d_imu * d_imu/d_xi
-    J =  J_cam * T_cam_imu.rotation_matrix() * G_x;
+    J =  J_cam * T_cam_imu.rotationMatrix() * G_x;
   }
 
   /// Jacobian of using unit bearing vector for map point w.r.t IMU pose.
   inline static void jacobian_xyz2f_imu(
-      const Sophus::SE3& T_cam_imu,
+      const Sophus::SE3d& T_cam_imu,
       const Eigen::Vector3d& p_in_imu,
       Eigen::Matrix<double, 3, 6>& J)
   {
@@ -235,7 +237,7 @@ public:
         -zx, -yz, x2+y2;
     J_normalize *= 1 / std::pow(x2+y2+z2, 1.5);
 
-    J = J_normalize * T_cam_imu.rotation_matrix() * G_x;
+    J = J_normalize * T_cam_imu.rotationMatrix() * G_x;
   }
 
 };
@@ -282,18 +284,18 @@ public:
   }
 
   /// Get pose of camera rig.
-  Sophus::SE3 get_T_W_B() const {
+  Sophus::SE3d get_T_W_B() const {
     assert(!frames_.empty());
     return frames_[0]->T_world_imu();
   }
 
-  Sophus::SE3 get_T_B_W() const {
+  Sophus::SE3d get_T_B_W() const {
     assert(!frames_.empty());
     return frames_[0]->T_imu_world();
   }
 
   /// Set pose of camera rig.
-  void set_T_W_B(const Sophus::SE3& T_W_B) {
+  void set_T_W_B(const Sophus::SE3d& T_W_B) {
     for(const FramePtr& frame : frames_)
       frame->T_f_w_ = (T_W_B * frame->T_body_cam_).inverse();
   }
@@ -312,7 +314,7 @@ public:
   size_t numFeatures() const
   {
     int n = 0;
-    for(const FramePtr& frame : frames_) n += frame->fts_.size();
+    for(const FramePtr& frame : frames_) n += frame->num_features_;// fts_.size();
     return n;
   }
 

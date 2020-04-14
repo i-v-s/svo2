@@ -18,8 +18,6 @@
 #include <vikit/math_utils.h>
 #include <vikit/abstract_camera.h>
 #include <vikit/vision.h>
-#include <boost/bind.hpp>
-#include <boost/math/distributions/normal.hpp>
 #include <svo/global.h>
 #include <svo/depth_filter.h>
 #include <svo/frame.h>
@@ -27,17 +25,20 @@
 #include <svo/feature.h>
 #include <svo/matcher.h>
 #include <svo/config.h>
-#include <svo/feature_detection.h>
+#define _USE_MATH_DEFINES
+#include <cmath>
+
+using namespace std;
 
 namespace svo {
 
 int Seed::batch_counter = 0;
 int Seed::seed_counter = 0;
 
-Seed::Seed(Feature* ftr, float depth_mean, float depth_min) :
+Seed::Seed(std::unique_ptr<Feature> ftr, float depth_mean, float depth_min) :
     batch_id(batch_counter),
     id(seed_counter++),
-    ftr(ftr),
+    ftr(std::move(ftr)),
     a(10),
     b(10),
     mu(1.0/depth_mean),
@@ -45,11 +46,10 @@ Seed::Seed(Feature* ftr, float depth_mean, float depth_min) :
     sigma2(z_range*z_range/36)
 {}
 
-DepthFilter::DepthFilter(feature_detection::DetectorPtr feature_detector, callback_t seed_converged_cb) :
+DepthFilter::DepthFilter(std::shared_ptr<vilib::DetectorBaseGPU> feature_detector, callback_t seed_converged_cb) :
     feature_detector_(feature_detector),
     seed_converged_cb_(seed_converged_cb),
     seeds_updating_halt_(false),
-    thread_(NULL),
     new_keyframe_set_(false),
     new_keyframe_min_depth_(0.0),
     new_keyframe_mean_depth_(0.0)
@@ -57,31 +57,32 @@ DepthFilter::DepthFilter(feature_detection::DetectorPtr feature_detector, callba
 
 DepthFilter::~DepthFilter()
 {
-  stopThread();
-  SVO_INFO_STREAM("DepthFilter destructed.");
+    stopThread();
+    SVO_INFO_STREAM("DepthFilter destructed.");
 }
 
 void DepthFilter::startThread()
 {
-  thread_ = new boost::thread(&DepthFilter::updateSeedsLoop, this);
+    thread_halt_ = false;
+    thread_ = make_unique<thread>(&DepthFilter::updateSeedsLoop, this);
 }
 
 void DepthFilter::stopThread()
 {
-  SVO_INFO_STREAM("DepthFilter stop thread invoked.");
-  if(thread_ != NULL)
-  {
-    SVO_INFO_STREAM("DepthFilter interrupt and join thread... ");
-    seeds_updating_halt_ = true;
-    thread_->interrupt();
-    thread_->join();
-    thread_ = NULL;
-  }
+    SVO_INFO_STREAM("DepthFilter stop thread invoked.");
+    if(thread_)
+    {
+        SVO_INFO_STREAM("DepthFilter interrupt and join thread... ");
+        seeds_updating_halt_ = true;
+        thread_halt_ = true;
+        thread_->join();
+        thread_.reset();
+    }
 }
 
 void DepthFilter::addFrame(FramePtr frame)
 {
-  if(thread_ != NULL)
+  if(thread_)
   {
     {
       lock_t lock(frame_queue_mut_);
@@ -98,53 +99,56 @@ void DepthFilter::addFrame(FramePtr frame)
 
 void DepthFilter::addKeyframe(FramePtr frame, double depth_mean, double depth_min)
 {
-  new_keyframe_min_depth_ = depth_min;
-  new_keyframe_mean_depth_ = depth_mean;
-  if(thread_ != NULL)
-  {
-    new_keyframe_ = frame;
-    new_keyframe_set_ = true;
-    seeds_updating_halt_ = true;
-    frame_queue_cond_.notify_one();
-  }
-  else
-    initializeSeeds(frame);
+    new_keyframe_min_depth_ = depth_min;
+    new_keyframe_mean_depth_ = depth_mean;
+    if(thread_)
+    {
+        new_keyframe_ = frame;
+        new_keyframe_set_ = true;
+        seeds_updating_halt_ = true;
+        frame_queue_cond_.notify_one();
+    }
+    else
+        initializeSeeds(frame);
 }
 
 void DepthFilter::addKeyframe(FramePtr frame, double depth_mean, double depth_min, const std::vector<FramePtr> & history_frames)
 {
-  new_keyframe_min_depth_ = depth_min;
-  new_keyframe_mean_depth_ = depth_mean;
-  if(thread_ != NULL)
-  {
-    new_keyframe_ = frame;
-    new_keyframe_set_ = true;
-    seeds_updating_halt_ = true;
-    new_keyframe_update_frames_ = history_frames;
-    frame_queue_cond_.notify_one();
-  }
-  else
-    initializeSeeds(frame);
+    new_keyframe_min_depth_ = depth_min;
+    new_keyframe_mean_depth_ = depth_mean;
+    if(thread_)
+    {
+        new_keyframe_ = frame;
+        new_keyframe_set_ = true;
+        seeds_updating_halt_ = true;
+        new_keyframe_update_frames_ = history_frames;
+        frame_queue_cond_.notify_one();
+    }
+    else
+        initializeSeeds(frame);
 }
 
 void DepthFilter::initializeSeeds(FramePtr frame)
 {
-  Features new_features;
-  feature_detector_->setExistingFeatures(frame->fts_);
-  feature_detector_->detect(frame.get(), frame->img_pyr_,
-                            Config::triangMinCornerScore(), new_features);
+    using namespace std;
+    auto &grid = feature_detector_->getGrid();
+    for_each(frame->fts_.begin(), frame->fts_.end(), [&](const std::unique_ptr<Feature> &f){
+        grid.setOccupied(static_cast<int>(f->px[0]), static_cast<int>(f->px[1]));
+    });
+    feature_detector_->detect(frame->pyramid_);
+    const auto &pts = feature_detector_->getPoints();
 
-  // initialize a seed for every new feature
-  seeds_updating_halt_ = true;
-  lock_t lock(seeds_mut_); // by locking the updateSeeds function stops
-  ++Seed::batch_counter;
-  std::for_each(new_features.begin(), new_features.end(), [&](Feature* ftr){
-    seeds_.push_back(Seed(ftr, new_keyframe_mean_depth_, new_keyframe_min_depth_));
-  });
+    // initialize a seed for every new feature
+    seeds_updating_halt_ = true;
+    lock_t lock(seeds_mut_); // by locking the updateSeeds function stops
+    ++Seed::batch_counter;
+    for_each(pts.begin(), pts.end(), [&](const vilib::DetectorBase::FeaturePoint &pt){
+        seeds_.emplace_back(make_unique<Feature>(frame.get(), Vector2d(pt.x_, pt.y_), pt.level_), new_keyframe_mean_depth_, new_keyframe_min_depth_);
+    });
 
-  if(options_.verbose)
-    SVO_INFO_STREAM("DepthFilter: Initialized "<<new_features.size()<<" new seeds");
-  seeds_updating_halt_ = false;
+    if(options_.verbose)
+        SVO_INFO_STREAM("DepthFilter: Initialized " << pts.size() << " new seeds");
+    seeds_updating_halt_ = false;
 }
 
 void DepthFilter::removeKeyframe(FramePtr frame)
@@ -168,57 +172,57 @@ void DepthFilter::removeKeyframe(FramePtr frame)
 
 void DepthFilter::reset()
 {
-  seeds_updating_halt_ = true;
-  {
+    seeds_updating_halt_ = true;
+    {
+        lock_t lock(seeds_mut_);
+        seeds_.clear();
+    }
     lock_t lock(seeds_mut_);
-    seeds_.clear();
-  }
-  lock_t lock();
-  while(!frame_queue_.empty())
-    frame_queue_.pop();
-  seeds_updating_halt_ = false;
+    while(!frame_queue_.empty())
+        frame_queue_.pop();
+    seeds_updating_halt_ = false;
 
-  if(options_.verbose)
-    SVO_INFO_STREAM("DepthFilter: RESET.");
+    if(options_.verbose)
+        SVO_INFO_STREAM("DepthFilter: RESET.");
 }
 
 void DepthFilter::updateSeedsLoop()
 {
-  while(!boost::this_thread::interruption_requested())
-  {
-    FramePtr frame;
-    std::vector<FramePtr> history_frames;
+    while(!thread_halt_)
     {
-      lock_t lock(frame_queue_mut_);
-      while(frame_queue_.empty() && new_keyframe_set_ == false)
-        frame_queue_cond_.wait(lock);
-      if(new_keyframe_set_)
-      {
-        new_keyframe_set_ = false;
-        seeds_updating_halt_ = false;
-        clearFrameQueue();
-        frame = new_keyframe_;
-        history_frames = new_keyframe_update_frames_;
-      }
-      else
-      {
-        frame = frame_queue_.front();
-        frame_queue_.pop();
-      }
+        FramePtr frame;
+        std::vector<FramePtr> history_frames;
+        {
+            lock_t lock(frame_queue_mut_);
+            while(frame_queue_.empty() && new_keyframe_set_ == false)
+                frame_queue_cond_.wait(lock);
+            if(new_keyframe_set_)
+            {
+                new_keyframe_set_ = false;
+                seeds_updating_halt_ = false;
+                clearFrameQueue();
+                frame = new_keyframe_;
+                history_frames = new_keyframe_update_frames_;
+            }
+            else
+            {
+                frame = frame_queue_.front();
+                frame_queue_.pop();
+            }
+        }
+        updateSeeds(frame);
+        if(frame->isKeyframe())
+        {
+            int old_seed_size = seeds_.size();
+            initializeSeeds(frame);
+            int new_seed_size = seeds_.size();
+            if(new_seed_size>old_seed_size)
+            {
+                for(auto& f:new_keyframe_update_frames_)
+                    updateSeeds(f, old_seed_size);
+            }
+        }
     }
-    updateSeeds(frame);
-    if(frame->isKeyframe())
-    {
-      int old_seed_size = seeds_.size();
-      initializeSeeds(frame);
-      int new_seed_size = seeds_.size();
-      if(new_seed_size>old_seed_size)
-      {
-        for(auto& f:new_keyframe_update_frames_)
-        updateSeeds(f, old_seed_size);
-      }
-    }
-  }
 }
 
 void DepthFilter::updateSeeds(FramePtr frame, int start_seed_idx)
@@ -260,7 +264,7 @@ void DepthFilter::updateSeeds(FramePtr frame, int start_seed_idx)
 
     // we are using inverse depth coordinates
     float z_inv_min = it->mu + sqrt(it->sigma2);
-    float z_inv_max = max(it->mu - sqrt(it->sigma2), 0.00000001f);
+    float z_inv_max = std::max(it->mu - sqrt(it->sigma2), 0.00000001f);
     double z;
     if(!matcher_.findEpipolarMatchDirect(
         *it->ftr->frame, *frame, *it->ftr, 1.0/it->mu, 1.0/z_inv_min, 1.0/z_inv_max, z))
@@ -273,7 +277,7 @@ void DepthFilter::updateSeeds(FramePtr frame, int start_seed_idx)
 
     // compute tau
     double tau = computeTau(T_ref_cur, it->ftr->f, z, px_error_angle);
-    double tau_inverse = 0.5 * (1.0/max(0.0000001, z-tau) - 1.0/(z+tau));
+    double tau_inverse = 0.5 * (1.0/std::max(0.0000001, z-tau) - 1.0/(z+tau));
 
     // update the estimate
     updateSeed(1./z, tau_inverse*tau_inverse, &*it);
@@ -281,8 +285,9 @@ void DepthFilter::updateSeeds(FramePtr frame, int start_seed_idx)
 
     if(frame->isKeyframe())
     {
-      // The feature detector should not initialize new seeds close to this location
-      feature_detector_->setGridOccpuancy(matcher_.px_cur_);
+        // The feature detector should not initialize new seeds close to this location
+        auto &px = matcher_.px_cur_;
+        feature_detector_->getGrid().setOccupied(px[0], px[1]);
     }
 
     // if the seed has converged, we initialize a new candidate point and remove the seed
@@ -290,7 +295,7 @@ void DepthFilter::updateSeeds(FramePtr frame, int start_seed_idx)
     {
       assert(it->ftr->point == NULL); // TODO this should not happen anymore
       Vector3d xyz_world(it->ftr->frame->T_f_w_.inverse() * (it->ftr->f * (1.0/it->mu)));
-      Point* point = new Point(xyz_world, it->ftr);
+      Point* point = new Point(xyz_world, it->ftr.get());
       it->ftr->point = point;
       /* FIXME it is not threadsafe to add a feature to the frame here.
       if(frame->isKeyframe())
@@ -324,14 +329,23 @@ void DepthFilter::clearFrameQueue()
     frame_queue_.pop();
 }
 
-void DepthFilter::getSeedsCopy(const FramePtr& frame, std::list<Seed>& seeds)
+/*void DepthFilter::getSeedsCopy(const FramePtr& frame, std::list<Seed>& seeds)
 {
-  lock_t lock(seeds_mut_);
-  for(std::list<Seed>::iterator it=seeds_.begin(); it!=seeds_.end(); ++it)
-  {
-    if (it->ftr->frame == frame.get())
-      seeds.push_back(*it);
-  }
+    lock_t lock(seeds_mut_);
+    for(std::list<Seed>::iterator it=seeds_.begin(); it!=seeds_.end(); ++it)
+    {
+        if (it->ftr->frame == frame.get())
+            seeds.push_back(*it);
+    }
+}*/
+
+template<class real>
+real pdf(std::normal_distribution<real> nd, real x)
+{
+    real e = x - nd.mean(), sd = nd.stddev();
+    e *= -e;
+    e /= 2 * sd * sd;
+    return exp(e) / (sd * sqrt(2 * M_PI));
 }
 
 void DepthFilter::updateSeed(const float x, const float tau2, Seed* seed)
@@ -339,10 +353,10 @@ void DepthFilter::updateSeed(const float x, const float tau2, Seed* seed)
   float norm_scale = sqrt(seed->sigma2 + tau2);
   if(std::isnan(norm_scale))
     return;
-  boost::math::normal_distribution<float> nd(seed->mu, norm_scale);
+  std::normal_distribution<float> nd(seed->mu, norm_scale);
   float s2 = 1./(1./seed->sigma2 + 1./tau2);
   float m = s2*(seed->mu/seed->sigma2 + x/tau2);
-  float C1 = seed->a/(seed->a+seed->b) * boost::math::pdf(nd, x);
+  float C1 = seed->a/(seed->a+seed->b) * pdf(nd, x);
   float C2 = seed->b/(seed->a+seed->b) * 1./seed->z_range;
   float normalization_constant = C1 + C2;
   C1 /= normalization_constant;
@@ -360,7 +374,7 @@ void DepthFilter::updateSeed(const float x, const float tau2, Seed* seed)
 }
 
 double DepthFilter::computeTau(
-      const SE3& T_ref_cur,
+      const SE3d& T_ref_cur,
       const Vector3d& f,
       const double z,
       const double px_error_angle)

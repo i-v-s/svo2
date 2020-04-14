@@ -17,9 +17,6 @@
 #include <list>
 #include <vector>
 #include <string>
-#include <boost/bind.hpp>
-#include <boost/make_shared.hpp>
-#include <boost/shared_ptr.hpp>
 #include <vikit/pinhole_camera.h>
 #include <vikit/abstract_camera.h>
 #include <vikit/atan_camera.h>
@@ -28,7 +25,7 @@
 #include <vikit/blender_utils.h>
 #include <vikit/timer.h>
 #include <iostream>
-#include <svo/feature_detection.h>
+//#include <svo/feature_detection.h>
 #include <svo/depth_filter.h>
 #include <svo/frame.h>
 #include <svo/feature.h>
@@ -105,11 +102,11 @@ void DepthFilterTest::testReconstruction(
   vk::Timer t;
   std::list<size_t> n_converged_per_iteration;
 
-  svo::feature_detection::DetectorPtr feature_detector(
-      new svo::feature_detection::FastDetector(
-          cam_->width(), cam_->height(), svo::Config::gridSize(), svo::Config::nPyrLevels()));
-  svo::DepthFilter::callback_t depth_filter_cb = boost::bind(&DepthFilterTest::depthFilterCb, this, _1, _2);
-  depth_filter_ = new svo::DepthFilter(feature_detector, depth_filter_cb);
+  // TODO: svo::feature_detection::DetectorPtr feature_detector(
+  //    new svo::feature_detection::FastDetector(
+  //        cam_->width(), cam_->height(), svo::Config::gridSize(), svo::Config::nPyrLevels()));
+  svo::DepthFilter::callback_t depth_filter_cb = std::bind(&DepthFilterTest::depthFilterCb, this, std::placeholders::_1, std::placeholders::_2);
+  // TODO: depth_filter_ = new svo::DepthFilter(feature_detector, depth_filter_cb);
   depth_filter_->options_.verbose = true;
 
   for(int i=0; it != sequence.end() && i<20; ++it, ++i)
@@ -119,11 +116,11 @@ void DepthFilterTest::testReconstruction(
     cv::Mat img(cv::imread(img_name, 0));
     assert(!img.empty());
 
-    Sophus::SE3 T_w_f(it->q_, it->t_);
+    Sophus::SE3d T_w_f(it->q_, it->t_);
     if(i == 0)
     {
       // create reference frame and load ground truth depthmap
-      frame_ref_ = boost::make_shared<svo::Frame>(cam_, img, 0.0);
+      frame_ref_ = std::make_shared<svo::Frame>(cam_, img, 0.0);
       frame_ref_->T_f_w_ = T_w_f.inverse();
       depth_filter_->addKeyframe(frame_ref_, 2, 0.5);
       vk::blender_utils::loadBlenderDepthmap(dataset_dir+"/depth/" + (*it).image_name_ + "_0.depth", *cam_, depth_ref_);
@@ -131,7 +128,7 @@ void DepthFilterTest::testReconstruction(
     }
 
     n_converged_seeds_ = 0;
-    frame_cur_ = boost::make_shared<svo::Frame>(cam_, img, 0.0);
+    frame_cur_ = std::make_shared<svo::Frame>(cam_, img, 0.0);
     frame_cur_->T_f_w_ = T_w_f.inverse();
     depth_filter_->addFrame(frame_cur_);
     n_converged_per_iteration.push_back(n_converged_seeds_);
@@ -185,13 +182,14 @@ void DepthFilterTest::testReconstruction(
 	  << "property uchar red" << std::endl
 	  << "end_header" << std::endl;
 
-  for(std::list<ConvergedSeed>::iterator i=results_.begin(); i!=results_.end(); ++i)
-  {
-	cv::Vec3b c = frame_ref_->img_pyr_[0].at<cv::Vec3b>(i->y_, i->x_);
-	Eigen::Vector3d p = cam_->cam2world(i->x_, i->y_)*i->depth_;
-	ofs << p[0] << " " << p[1] << " " << p[2] << " "
+    for(std::list<ConvergedSeed>::iterator i=results_.begin(); i!=results_.end(); ++i)
+    {
+        cv::Mat frame = *frame_ref_->pyramid_[0];
+        cv::Vec3b c = frame.at<cv::Vec3b>(i->y_, i->x_);
+        Eigen::Vector3d p = cam_->cam2world(i->x_, i->y_)*i->depth_;
+        ofs << p[0] << " " << p[1] << " " << p[2] << " "
 	    << (int) c[0] << " " << (int) c[1] << " " << (int) c[2] << std::endl;
-  }
+    }
 }
 
 }  // namespace

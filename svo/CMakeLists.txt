@@ -8,7 +8,7 @@ SET(DEBUG_OUTPUT FALSE) # Only relevant if build without ROS
 
 ################################################################################
 
-PROJECT(svolib)
+PROJECT(svo_lib)
 cmake_minimum_required(VERSION 3.10 FATAL_ERROR)
 SET(CMAKE_BUILD_TYPE Release) # Release, RelWithDebInfo
 SET(CMAKE_VERBOSE_MAKEFILE OFF)
@@ -68,7 +68,7 @@ IF(USE_ROS)
   INCLUDE_DIRECTORIES(${catkin_INCLUDE_DIRS})
   LIST(APPEND LINK_LIBS ${catkin_LIBRARIES})
 ELSE()
-  LIST(APPEND LINK_LIBS vikit::vikit_common)
+  LIST(APPEND LINK_LIBS vikit::common)
 ENDIF()
 
 # Set sourcefiles
@@ -110,7 +110,6 @@ set_target_properties(svo PROPERTIES
     CXX_STANDARD 17
     CXX_EXTENSIONS OFF
 )
-
 
 target_link_libraries(svo
     ${LINK_LIBS}

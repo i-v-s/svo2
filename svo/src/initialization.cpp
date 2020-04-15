@@ -30,86 +30,86 @@ using namespace std;
 
 InitResult KltHomographyInit::addFirstFrame(FramePtr frame_ref)
 {
-  reset();
-  detectFeatures(frame_ref, px_ref_, f_ref_);
-  if(px_ref_.size() < 100)
-  {
-    SVO_WARN_STREAM_THROTTLE(2.0, "First image has less than 100 features. Retry in more textured environment.");
-    return FAILURE;
-  }
-  frame_ref_ = frame_ref;
-  px_cur_.insert(px_cur_.begin(), px_ref_.begin(), px_ref_.end());
-  return SUCCESS;
+    reset();
+    detectFeatures(frame_ref, px_ref_, f_ref_);
+    if(px_ref_.size() < 100)
+    {
+        SVO_WARN_STREAM_THROTTLE(2.0, "First image has less than 100 features. Retry in more textured environment.");
+        return FAILURE;
+    }
+    frame_ref_ = frame_ref;
+    px_cur_.insert(px_cur_.begin(), px_ref_.begin(), px_ref_.end());
+    return SUCCESS;
 }
 
 InitResult KltHomographyInit::addSecondFrame(FramePtr frame_cur)
 {
-  trackKlt(frame_ref_, frame_cur, px_ref_, px_cur_, f_ref_, f_cur_, disparities_);
-  SVO_INFO_STREAM("Init: KLT tracked "<< disparities_.size() <<" features");
+    trackKlt(frame_ref_, frame_cur, px_ref_, px_cur_, f_ref_, f_cur_, disparities_);
+    SVO_INFO_STREAM("Init: KLT tracked "<< disparities_.size() <<" features");
 
-  if(disparities_.size() < Config::initMinTracked())
-    return FAILURE;
+    if(disparities_.size() < Config::initMinTracked())
+        return FAILURE;
 
-  double disparity = vk::getMedian(disparities_);
-  SVO_INFO_STREAM("Init: KLT "<<disparity<<"px average disparity.");
-  if(disparity < Config::initMinDisparity())
-    return NO_KEYFRAME;
+    double disparity = vk::getMedian(disparities_);
+    SVO_INFO_STREAM("Init: KLT "<<disparity<<"px average disparity.");
+    if(disparity < Config::initMinDisparity())
+        return NO_KEYFRAME;
 
-  computeHomography(
-      f_ref_, f_cur_,
-      frame_ref_->cam_->errorMultiplier2(), Config::poseOptimThresh(),
-      inliers_, xyz_in_cur_, T_cur_from_ref_);
-  SVO_INFO_STREAM("Init: Homography RANSAC "<<inliers_.size()<<" inliers.");
+    computeHomography(
+                f_ref_, f_cur_,
+                frame_ref_->cam_->errorMultiplier2(), Config::poseOptimThresh(),
+                inliers_, xyz_in_cur_, T_cur_from_ref_);
+    SVO_INFO_STREAM("Init: Homography RANSAC "<<inliers_.size()<<" inliers.");
 
-  if(inliers_.size() < Config::initMinInliers())
-  {
-    SVO_WARN_STREAM("Init WARNING: "<<Config::initMinInliers()<<" inliers minimum required.");
-    return FAILURE;
-  }
-
-  // Rescale the map such that the mean scene depth is equal to the specified scale
-  std::vector<double> depth_vec;
-  for(size_t i=0; i<xyz_in_cur_.size(); ++i)
-    depth_vec.push_back((xyz_in_cur_[i]).z());
-  double scene_depth_median = vk::getMedian(depth_vec);
-  double scale = Config::mapScale()/scene_depth_median;
-  frame_cur->T_f_w_ = T_cur_from_ref_ * frame_ref_->T_f_w_;
-  frame_cur->T_f_w_.translation() =
-      -frame_cur->T_f_w_.rotationMatrix()*(frame_ref_->pos() + scale*(frame_cur->pos() - frame_ref_->pos()));
-
-  // For each inlier create 3D point and add feature in both frames
-  SE3 T_world_cur = frame_cur->T_f_w_.inverse();
-  for(std::vector<int>::iterator it=inliers_.begin(); it!=inliers_.end(); ++it)
-  {
-    Vector2d px_cur(px_cur_[*it].x, px_cur_[*it].y);
-    Vector2d px_ref(px_ref_[*it].x, px_ref_[*it].y);
-    if(frame_ref_->cam_->isInFrame(px_cur.cast<int>(), 10) && frame_ref_->cam_->isInFrame(px_ref.cast<int>(), 10) && xyz_in_cur_[*it].z() > 0)
+    if(inliers_.size() < Config::initMinInliers())
     {
-      Vector3d pos = T_world_cur * (xyz_in_cur_[*it]*scale);
-      Point* new_point = new Point(pos);
-
-      Feature* ftr_cur(new Feature(frame_cur.get(), new_point, px_cur, f_cur_[*it], 0));
-      frame_cur->addFeature(ftr_cur);
-      new_point->addFrameRef(ftr_cur);
-
-      Feature* ftr_ref(new Feature(frame_ref_.get(), new_point, px_ref, f_ref_[*it], 0));
-      frame_ref_->addFeature(ftr_ref);
-      new_point->addFrameRef(ftr_ref);
+        SVO_WARN_STREAM("Init WARNING: "<<Config::initMinInliers()<<" inliers minimum required.");
+        return FAILURE;
     }
-  }
-  return SUCCESS;
+
+    // Rescale the map such that the mean scene depth is equal to the specified scale
+    std::vector<double> depth_vec;
+    for(size_t i=0; i<xyz_in_cur_.size(); ++i)
+        depth_vec.push_back((xyz_in_cur_[i]).z());
+    double scene_depth_median = vk::getMedian(depth_vec);
+    double scale = Config::mapScale()/scene_depth_median;
+    frame_cur->T_f_w_ = T_cur_from_ref_ * frame_ref_->T_f_w_;
+    frame_cur->T_f_w_.translation() =
+            -frame_cur->T_f_w_.rotationMatrix()*(frame_ref_->pos() + scale*(frame_cur->pos() - frame_ref_->pos()));
+
+    // For each inlier create 3D point and add feature in both frames
+    SE3 T_world_cur = frame_cur->T_f_w_.inverse();
+    for(std::vector<int>::iterator it=inliers_.begin(); it!=inliers_.end(); ++it)
+    {
+        Vector2d px_cur(px_cur_[*it].x, px_cur_[*it].y);
+        Vector2d px_ref(px_ref_[*it].x, px_ref_[*it].y);
+        if(frame_ref_->cam_->isInFrame(px_cur.cast<int>(), 10) && frame_ref_->cam_->isInFrame(px_ref.cast<int>(), 10) && xyz_in_cur_[*it].z() > 0)
+        {
+            Vector3d pos = T_world_cur * (xyz_in_cur_[*it]*scale);
+            Point* new_point = new Point(pos);
+
+            Feature* ftr_cur(new Feature(frame_cur.get(), new_point, px_cur, f_cur_[*it], 0));
+            frame_cur->addFeature(ftr_cur);
+            new_point->addFrameRef(ftr_cur);
+
+            Feature* ftr_ref(new Feature(frame_ref_.get(), new_point, px_ref, f_ref_[*it], 0));
+            frame_ref_->addFeature(ftr_ref);
+            new_point->addFrameRef(ftr_ref);
+        }
+    }
+    return SUCCESS;
 }
 
 void KltHomographyInit::reset()
 {
-  px_cur_.clear();
-  frame_ref_.reset();
+    px_cur_.clear();
+    frame_ref_.reset();
 }
 
 void KltHomographyInit::detectFeatures(
-    FramePtr frame,
-    std::vector<cv::Point2f>& px_vec,
-    std::vector<Vector3d>& f_vec)
+        FramePtr frame,
+        std::vector<cv::Point2f>& px_vec,
+        std::vector<Vector3d>& f_vec)
 {
     detector_->reset();
     detector_->detect(frame->pyramid_);
@@ -128,140 +128,140 @@ void KltHomographyInit::detectFeatures(
 }
 
 void KltHomographyInit::trackKlt(
-    FramePtr frame_ref,
-    FramePtr frame_cur,
-    std::vector<cv::Point2f>& px_ref,
-    std::vector<cv::Point2f>& px_cur,
-    std::vector<Vector3d>& f_ref,
-    std::vector<Vector3d>& f_cur,
-    std::vector<double>& disparities)
+        FramePtr frame_ref,
+        FramePtr frame_cur,
+        std::vector<cv::Point2f>& px_ref,
+        std::vector<cv::Point2f>& px_cur,
+        std::vector<Vector3d>& f_ref,
+        std::vector<Vector3d>& f_cur,
+        std::vector<double>& disparities)
 {
-  const double klt_win_size = 30.0;
-  const int klt_max_iter = 30;
-  const double klt_eps = 0.001;
-  std::vector<uchar> status;
-  std::vector<float> error;
-  std::vector<float> min_eig_vec;
-  cv::TermCriteria termcrit(cv::TermCriteria::COUNT + cv::TermCriteria::EPS, klt_max_iter, klt_eps);
-  cv::Mat img_ref, img_cur;
-  frame_ref->pyramid_[0]->copy_to(img_ref);
-  frame_cur->pyramid_[0]->copy_to(img_cur);
-  cv::calcOpticalFlowPyrLK(img_ref, img_cur,
-                           px_ref, px_cur,
-                           status, error,
-                           cv::Size2i(klt_win_size, klt_win_size),
-                           4, termcrit, cv::OPTFLOW_USE_INITIAL_FLOW);
-  std::vector<cv::Point2f>::iterator px_ref_it = px_ref.begin();
-  std::vector<cv::Point2f>::iterator px_cur_it = px_cur.begin();
-  std::vector<Vector3d>::iterator f_ref_it = f_ref.begin();
-  f_cur.clear(); f_cur.reserve(px_cur.size());
-  disparities.clear(); disparities.reserve(px_cur.size());
-  for(size_t i=0; px_ref_it != px_ref.end(); ++i)
-  {
-    if(!status[i])
+    const double klt_win_size = 30.0;
+    const int klt_max_iter = 30;
+    const double klt_eps = 0.001;
+    std::vector<uchar> status;
+    std::vector<float> error;
+    std::vector<float> min_eig_vec;
+    cv::TermCriteria termcrit(cv::TermCriteria::COUNT + cv::TermCriteria::EPS, klt_max_iter, klt_eps);
+    cv::Mat img_ref, img_cur;
+    frame_ref->pyramid_[0]->copy_to(img_ref);
+    frame_cur->pyramid_[0]->copy_to(img_cur);
+    cv::calcOpticalFlowPyrLK(img_ref, img_cur,
+                             px_ref, px_cur,
+                             status, error,
+                             cv::Size2i(klt_win_size, klt_win_size),
+                             4, termcrit, cv::OPTFLOW_USE_INITIAL_FLOW);
+    std::vector<cv::Point2f>::iterator px_ref_it = px_ref.begin();
+    std::vector<cv::Point2f>::iterator px_cur_it = px_cur.begin();
+    std::vector<Vector3d>::iterator f_ref_it = f_ref.begin();
+    f_cur.clear(); f_cur.reserve(px_cur.size());
+    disparities.clear(); disparities.reserve(px_cur.size());
+    for(size_t i=0; px_ref_it != px_ref.end(); ++i)
     {
-      px_ref_it = px_ref.erase(px_ref_it);
-      px_cur_it = px_cur.erase(px_cur_it);
-      f_ref_it = f_ref.erase(f_ref_it);
-      continue;
+        if(!status[i])
+        {
+            px_ref_it = px_ref.erase(px_ref_it);
+            px_cur_it = px_cur.erase(px_cur_it);
+            f_ref_it = f_ref.erase(f_ref_it);
+            continue;
+        }
+        f_cur.push_back(frame_cur->c2f(px_cur_it->x, px_cur_it->y));
+        disparities.push_back(Vector2d(px_ref_it->x - px_cur_it->x, px_ref_it->y - px_cur_it->y).norm());
+        ++px_ref_it;
+        ++px_cur_it;
+        ++f_ref_it;
     }
-    f_cur.push_back(frame_cur->c2f(px_cur_it->x, px_cur_it->y));
-    disparities.push_back(Vector2d(px_ref_it->x - px_cur_it->x, px_ref_it->y - px_cur_it->y).norm());
-    ++px_ref_it;
-    ++px_cur_it;
-    ++f_ref_it;
-  }
 }
 
 void computeHomography(
-    const std::vector<Vector3d>& f_ref,
-    const std::vector<Vector3d>& f_cur,
-    double focal_length,
-    double reprojection_threshold,
-    std::vector<int>& inliers,
-    std::vector<Vector3d>& xyz_in_cur,
-    SE3d& T_cur_from_ref)
+        const std::vector<Vector3d>& f_ref,
+        const std::vector<Vector3d>& f_cur,
+        double focal_length,
+        double reprojection_threshold,
+        std::vector<int>& inliers,
+        std::vector<Vector3d>& xyz_in_cur,
+        SE3d& T_cur_from_ref)
 {
-  std::vector<Vector2d > uv_ref(f_ref.size());
-  std::vector<Vector2d > uv_cur(f_cur.size());
-  for(size_t i=0, i_max=f_ref.size(); i<i_max; ++i)
-  {
-    uv_ref[i] = vk::project2d(f_ref[i]);
-    uv_cur[i] = vk::project2d(f_cur[i]);
-  }
-  vk::Homography Homography(uv_ref, uv_cur, focal_length, reprojection_threshold);
-  Homography.computeSE3fromMatches();
-  std::vector<int> outliers;
-  vk::computeInliers(f_cur, f_ref,
-                     Homography.T_c2_from_c1.rotationMatrix(), Homography.T_c2_from_c1.translation(),
-                     reprojection_threshold, focal_length,
-                     xyz_in_cur, inliers, outliers);
-  T_cur_from_ref = Homography.T_c2_from_c1;
+    std::vector<Vector2d > uv_ref(f_ref.size());
+    std::vector<Vector2d > uv_cur(f_cur.size());
+    for(size_t i=0, i_max=f_ref.size(); i<i_max; ++i)
+    {
+        uv_ref[i] = vk::project2d(f_ref[i]);
+        uv_cur[i] = vk::project2d(f_cur[i]);
+    }
+    vk::Homography Homography(uv_ref, uv_cur, focal_length, reprojection_threshold);
+    Homography.computeSE3fromMatches();
+    std::vector<int> outliers;
+    vk::computeInliers(f_cur, f_ref,
+                       Homography.T_c2_from_c1.rotationMatrix(), Homography.T_c2_from_c1.translation(),
+                       reprojection_threshold, focal_length,
+                       xyz_in_cur, inliers, outliers);
+    T_cur_from_ref = Homography.T_c2_from_c1;
 }
 
 InitResult KltHomographyInit::initFrameStereo(FramePtr frame_left, FramePtr frame_right)
 {
-  vector<cv::Point2f> px_left, px_right;
-  vector<Vector3d> f_left, f_right;   //!< bearing vectors corresponding to the keypoints in the reference image.
-  vector<double> disparities;         //!< disparity between first and second frame.
-  detectFeatures(frame_left, px_left, f_left);
-  px_right = px_left;
-  trackKlt(frame_left, frame_right, px_left, px_right, f_left, f_right, disparities);
-  SVO_INFO_STREAM("Init: KLT tracked "<< disparities.size() <<" features");
-  if(disparities.size() < Config::initMinTracked())
-    return FAILURE;
+    vector<cv::Point2f> px_left, px_right;
+    vector<Vector3d> f_left, f_right;   //!< bearing vectors corresponding to the keypoints in the reference image.
+    vector<double> disparities;         //!< disparity between first and second frame.
+    detectFeatures(frame_left, px_left, f_left);
+    px_right = px_left;
+    trackKlt(frame_left, frame_right, px_left, px_right, f_left, f_right, disparities);
+    SVO_INFO_STREAM("Init: KLT tracked "<< disparities.size() <<" features");
+    if(disparities.size() < Config::initMinTracked())
+        return FAILURE;
 
-  double baseline = (frame_left->T_body_cam_ * frame_right->T_cam_body_).translation().norm();
+    double baseline = (frame_left->T_body_cam_ * frame_right->T_cam_body_).translation().norm();
 
-  int inlier_cnt = 0;
-  for(size_t i=0; i<px_left.size(); i++)
-  {
-    cv::Point2f p_left = px_left[i];
-    cv::Point2f p_right = px_right[i];
-    float disp = p_left.x - p_right.x;
-    if(fabs(p_left.y-p_right.y)>3 || disp<=0) {continue;}
-    float z = frame_left->cam_->errorMultiplier2() * baseline / disp;
+    size_t inlier_cnt = 0;
+    for(size_t i=0; i<px_left.size(); i++)
+    {
+        cv::Point2f p_left = px_left[i];
+        cv::Point2f p_right = px_right[i];
+        float disp = p_left.x - p_right.x;
+        if(fabs(p_left.y-p_right.y)>3 || disp<=0) {continue;}
+        float z = frame_left->cam_->errorMultiplier2() * baseline / disp;
 
-    Vector3d pos = frame_left->T_f_w_.inverse() * (f_left[i] * z / f_left[i].z());
-    Point* new_point = new Point(pos);
+        Vector3d pos = frame_left->T_f_w_.inverse() * (f_left[i] * z / f_left[i].z());
+        Point* new_point = new Point(pos);
 
-    Feature* ftr_left(new Feature(frame_left.get(), new_point, Vector2d(p_left.x, p_left.y), f_left[i], 0));
-    frame_left->addFeature(ftr_left);
-    new_point->addFrameRef(ftr_left);
+        Feature* ftr_left(new Feature(frame_left.get(), new_point, Vector2d(p_left.x, p_left.y), f_left[i], 0));
+        frame_left->addFeature(ftr_left);
+        new_point->addFrameRef(ftr_left);
 
-    Feature* ftr_right(new Feature(frame_right.get(), new_point, Vector2d(p_right.x, p_right.y), f_right[i], 0));
-    frame_right->addFeature(ftr_right);
-    new_point->addFrameRef(ftr_right);
+        Feature* ftr_right(new Feature(frame_right.get(), new_point, Vector2d(p_right.x, p_right.y), f_right[i], 0));
+        frame_right->addFeature(ftr_right);
+        new_point->addFrameRef(ftr_right);
 
-    inlier_cnt++;
-  }
+        inlier_cnt++;
+    }
 
-  #if 0
+#if 0
     cv::Mat img_show;
     cv::hconcat(frame_left->img_pyr_[0], frame_right->img_pyr_[0], img_show);
     cv::cvtColor(img_show, img_show, cv::COLOR_GRAY2BGR);
     for(size_t i=0; i<px_left.size(); i++)
     {
-      cv::Point2f p_left = px_left[i];
-      cv::Point2f p_right = px_right[i];
-      float disp = p_left.x - p_right.x;
-      if(fabs(p_left.y-p_right.y)>3 || disp<=0) {continue;}
-      cv::Point p1(p_left.x,p_left.y);
-      cv::Point p2(p_right.x+img_show.cols/2,p_right.y);
-      cv::circle(img_show, p1, 2, cv::Scalar(0,255,0), -1);
-      cv::circle(img_show, p2, 2, cv::Scalar(0,255,0), -1);
-      cv::line(img_show, p1, p2, cv::Scalar(rand()%256,rand()%256,rand()%256));
+        cv::Point2f p_left = px_left[i];
+        cv::Point2f p_right = px_right[i];
+        float disp = p_left.x - p_right.x;
+        if(fabs(p_left.y-p_right.y)>3 || disp<=0) {continue;}
+        cv::Point p1(p_left.x,p_left.y);
+        cv::Point p2(p_right.x+img_show.cols/2,p_right.y);
+        cv::circle(img_show, p1, 2, cv::Scalar(0,255,0), -1);
+        cv::circle(img_show, p2, 2, cv::Scalar(0,255,0), -1);
+        cv::line(img_show, p1, p2, cv::Scalar(rand()%256,rand()%256,rand()%256));
     }
     cv::imshow("stereo init",img_show);
     cv::waitKey();
-  #endif
+#endif
 
-  if(inlier_cnt < Config::initMinInliers())
-  {
-    SVO_WARN_STREAM("Init WARNING: "<<Config::initMinInliers()<<" inliers minimum required.");
-    return FAILURE;
-  }
-  return SUCCESS;
+    if(inlier_cnt < Config::initMinInliers())
+    {
+        SVO_WARN_STREAM("Init WARNING: "<<Config::initMinInliers()<<" inliers minimum required.");
+        return FAILURE;
+    }
+    return SUCCESS;
 }
 
 } // namespace initialization

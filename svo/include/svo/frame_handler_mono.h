@@ -32,7 +32,7 @@ class FrameHandlerMono : public FrameHandlerBase
 public:
   EIGEN_MAKE_ALIGNED_OPERATOR_NEW
   
-  FrameHandlerMono(vk::AbstractCamera* cam, std::shared_ptr<vilib::DetectorBaseGPU> detector);
+  FrameHandlerMono(std::shared_ptr<vk::AbstractCamera> cam, std::shared_ptr<vilib::DetectorBaseGPU> detector);
 
   /// Provide an image.
   void addImage(const cv::Mat& img, double timestamp);
@@ -58,7 +58,7 @@ public:
       const double timestamp);
 
 protected:
-  vk::AbstractCamera* cam_;                     //!< Camera model, can be ATAN, Pinhole or Ocam (see vikit).
+  std::shared_ptr<vk::AbstractCamera> cam_;     //!< Camera model, can be ATAN, Pinhole or Ocam (see vikit).
   Reprojector reprojector_;                     //!< Projects points from other keyframes into the current frame
   FramePtr new_frame_;                          //!< Current frame.
   FramePtr last_frame_;                         //!< Last frame, not necessarily a keyframe.

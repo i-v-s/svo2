@@ -37,7 +37,7 @@ namespace svo {
 
 class BenchmarkNode
 {
-  unique_ptr<vk::AbstractCamera> cam_;
+  shared_ptr<vk::AbstractCamera> cam_;
   unique_ptr<svo::FrameHandlerMono> vo_;
   shared_ptr<vilib::DetectorBaseGPU> detector_;
 
@@ -48,9 +48,9 @@ public:
 
 BenchmarkNode::BenchmarkNode()
 {
-  cam_ = make_unique<vk::PinholeCamera>(752, 480, 315.5, 315.5, 376.0, 240.0);
+  cam_ = make_shared<vk::PinholeCamera>(752, 480, 315.5, 315.5, 376.0, 240.0);
   // TODO: detector_ =
-  vo_ = make_unique<svo::FrameHandlerMono>(cam_.get(), detector_);
+  vo_ = make_unique<svo::FrameHandlerMono>(cam_, detector_);
   vo_->start();
 }
 
@@ -84,7 +84,7 @@ void BenchmarkNode::runFromFolder()
 
 } // namespace svo
 
-int main(int argc, char** argv)
+int main(int, char**)
 {
   {
     svo::BenchmarkNode benchmark;

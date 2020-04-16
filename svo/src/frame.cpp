@@ -37,7 +37,7 @@ Frame::Frame(vk::AbstractCamera* cam, const cv::Mat& img, double timestamp, size
     is_keyframe_(false),
     v_kf_(NULL)
 {
-  initFrame(img);
+    initFrame(img);
 }
 
 void Frame::update_features()

@@ -36,7 +36,7 @@ public:
     EIGEN_MAKE_ALIGNED_OPERATOR_NEW
 
     FramePtr frame_ref_;
-    KltHomographyInit() {};
+    KltHomographyInit(std::shared_ptr<vilib::DetectorBaseGPU> detector);;
     InitResult addFirstFrame(FramePtr frame_ref);
     InitResult addSecondFrame(FramePtr frame_ref);
     void reset();
@@ -51,7 +51,7 @@ protected:
     std::vector<int> inliers_;             //!< inliers after the geometric check (e.g., Homography).
     std::vector<Vector3d> xyz_in_cur_;     //!< 3D points computed during the geometric check.
     SE3d T_cur_from_ref_;                  //!< computed transformation between the first two frames.
-    std::unique_ptr<vilib::DetectorBaseGPU> detector_;
+    std::shared_ptr<vilib::DetectorBaseGPU> detector_;
 
     /// Detect Fast corners in the image.
     void detectFeatures(

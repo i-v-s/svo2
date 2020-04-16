@@ -30,10 +30,11 @@
 
 namespace svo {
 
-FrameHandlerMono::FrameHandlerMono(vk::AbstractCamera* cam, std::shared_ptr<vilib::DetectorBaseGPU> detector) :
+FrameHandlerMono::FrameHandlerMono(std::shared_ptr<vk::AbstractCamera> cam, std::shared_ptr<vilib::DetectorBaseGPU> detector) :
     FrameHandlerBase(),
     cam_(cam),
-    reprojector_(cam_, map_)
+    reprojector_(cam_.get(), map_),
+    klt_homography_init_(detector)
 {
     initialize(detector);
 }
@@ -61,7 +62,7 @@ void FrameHandlerMono::addImage(const cv::Mat& img, const double timestamp)
 
   // create new frame
   SVO_START_TIMER("pyramid_creation");
-  new_frame_.reset(new Frame(cam_, img.clone(), timestamp));
+  new_frame_.reset(new Frame(cam_.get(), img.clone(), timestamp));
   SVO_STOP_TIMER("pyramid_creation");
 
   // process frame
@@ -276,7 +277,7 @@ bool FrameHandlerMono::relocalizeFrameAtPose(
   FramePtr ref_keyframe;
   if(!map_.getKeyframeById(keyframe_id, ref_keyframe))
     return false;
-  new_frame_.reset(new Frame(cam_, img.clone(), timestamp));
+  new_frame_.reset(new Frame(cam_.get(), img.clone(), timestamp));
   UpdateResult res = relocalizeFrame(T_f_kf, ref_keyframe);
   if(res != RESULT_FAILURE) {
     last_frame_ = new_frame_;

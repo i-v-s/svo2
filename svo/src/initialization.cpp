@@ -28,6 +28,12 @@ namespace initialization {
 using namespace std;
 
 
+KltHomographyInit::KltHomographyInit(std::shared_ptr<vilib::DetectorBaseGPU> detector):
+    detector_(detector)
+{
+
+}
+
 InitResult KltHomographyInit::addFirstFrame(FramePtr frame_ref)
 {
     reset();

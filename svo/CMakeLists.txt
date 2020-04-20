@@ -1,16 +1,16 @@
 ################################################################################
 # user build settings
 
-SET(TRACE TRUE)
-SET(HAVE_G2O FALSE) 
-OPTION(USE_ROS "" FALSE) # Set FALSE if you want to build this package without Catkin
-SET(DEBUG_OUTPUT FALSE) # Only relevant if build without ROS
+set(TRACE TRUE)
+set(HAVE_G2O FALSE)
+option(USE_ROS "" FALSE) # Set FALSE if you want to build this package without Catkin
+set(DEBUG_OUTPUT FALSE) # Only relevant if build without ROS
 
 ################################################################################
 
-PROJECT(svo_lib)
+project(svo_lib)
 cmake_minimum_required(VERSION 3.10 FATAL_ERROR)
-SET(CMAKE_BUILD_TYPE Release) # Release, RelWithDebInfo
+
 SET(CMAKE_VERBOSE_MAKEFILE OFF)
 SET(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${PROJECT_SOURCE_DIR}/CMakeModules/")
 
@@ -27,17 +27,6 @@ ENDIF()
 IF(DEBUG_OUTPUT)
   ADD_DEFINITIONS(-DSVO_DEBUG_OUTPUT)
 ENDIF()
-
-# Set build flags, set ARM_ARCHITECTURE environment variable on Odroid
-# Set build flags. Set IS_ARM on odroid board as environment variable
-SET(CMAKE_CXX_FLAGS "-Wall -D_LINUX -D_REENTRANT -march=native -Wno-unused-variable -Wno-unused-but-set-variable -Wno-unknown-pragmas")
-IF(DEFINED ENV{ARM_ARCHITECTURE})
-  SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -mfpu=neon -march=armv7-a")
-ELSE()
-  SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -mmmx -msse -msse -msse2 -msse3 -mssse3")
-ENDIF()
-
-SET(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS} -O3 -fsee -fomit-frame-pointer -fno-signed-zeros -fno-math-errno -funroll-loops")
 
 # Add plain cmake packages 
 FIND_PACKAGE(OpenCV REQUIRED)
@@ -58,10 +47,10 @@ else()
 endif()
 
 # Set link libraries
-LIST(APPEND LINK_LIBS 
-  ${OpenCV_LIBS}
-  Sophus::Sophus
-  vilib::vilib
+list(APPEND LINK_LIBS
+    ${OpenCV_LIBS}
+    Sophus::Sophus
+    vilib::vilib
 )
 
 IF(USE_ROS)
@@ -104,12 +93,25 @@ IF(HAVE_G2O)
 ENDIF(HAVE_G2O)
 
 # Create svo library
-add_library(svo SHARED ${SOURCEFILES})
+add_library(svo ${SOURCEFILES})
 
 set_target_properties(svo PROPERTIES
     CXX_STANDARD 17
     CXX_EXTENSIONS OFF
+    POSITION_INDEPENDENT_CODE ON
 )
+# Set build flags, set ARM_ARCHITECTURE environment variable on Odroid
+# Set build flags. Set IS_ARM on odroid board as environment variable
+SET(CMAKE_CXX_FLAGS "-Wall -D_LINUX -D_REENTRANT -march=native -Wno-unused-variable -Wno-unused-but-set-variable -Wno-unknown-pragmas")
+IF(DEFINED ENV{ARM_ARCHITECTURE})
+  SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -mfpu=neon -march=armv7-a")
+ELSE()
+  target_compile_options(svo PUBLIC -mmmx -msse -msse -msse2 -msse3 -mssse3 -msse4.1 -mavx2)
+  # SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -mmmx -msse -msse -msse2 -msse3 -mssse3")
+ENDIF()
+
+SET(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS} -O3 -fsee -fomit-frame-pointer -fno-signed-zeros -fno-math-errno -funroll-loops")
+
 
 target_link_libraries(svo
     ${LINK_LIBS}
@@ -121,24 +123,27 @@ target_include_directories(svo
 
 ################################################################################
 # TESTS
+SET(WITH_TESTS OFF)
 
-ADD_EXECUTABLE(test_feature_align test/test_feature_alignment.cpp)
-TARGET_LINK_LIBRARIES(test_feature_align svo)
+if(WITH_TESTS)
+    ADD_EXECUTABLE(test_feature_align test/test_feature_alignment.cpp)
+    TARGET_LINK_LIBRARIES(test_feature_align svo)
 
-ADD_EXECUTABLE(test_pipeline test/test_pipeline.cpp)
-TARGET_LINK_LIBRARIES(test_pipeline svo)
+    ADD_EXECUTABLE(test_pipeline test/test_pipeline.cpp)
+    TARGET_LINK_LIBRARIES(test_pipeline svo)
 
-ADD_EXECUTABLE(test_matcher test/test_matcher.cpp)
-TARGET_LINK_LIBRARIES(test_matcher svo)
+    ADD_EXECUTABLE(test_matcher test/test_matcher.cpp)
+    TARGET_LINK_LIBRARIES(test_matcher svo)
 
-ADD_EXECUTABLE(test_feature_detection test/test_feature_detection.cpp)
-TARGET_LINK_LIBRARIES(test_feature_detection svo)
+    ADD_EXECUTABLE(test_feature_detection test/test_feature_detection.cpp)
+    TARGET_LINK_LIBRARIES(test_feature_detection svo)
 
-ADD_EXECUTABLE(test_depth_filter test/test_depth_filter.cpp)
-TARGET_LINK_LIBRARIES(test_depth_filter svo)
+    ADD_EXECUTABLE(test_depth_filter test/test_depth_filter.cpp)
+    TARGET_LINK_LIBRARIES(test_depth_filter svo)
 
-ADD_EXECUTABLE(test_sparse_img_align test/test_sparse_img_align.cpp)
-TARGET_LINK_LIBRARIES(test_sparse_img_align svo)
+    ADD_EXECUTABLE(test_sparse_img_align test/test_sparse_img_align.cpp)
+    TARGET_LINK_LIBRARIES(test_sparse_img_align svo)
 
-ADD_EXECUTABLE(test_pose_optimizer test/test_pose_optimizer.cpp)
-TARGET_LINK_LIBRARIES(test_pose_optimizer svo) 
+    ADD_EXECUTABLE(test_pose_optimizer test/test_pose_optimizer.cpp)
+    TARGET_LINK_LIBRARIES(test_pose_optimizer svo)
+endif()

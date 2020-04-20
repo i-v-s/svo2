@@ -21,6 +21,7 @@
 #include <vikit/abstract_camera.h>
 #include <svo/frame_handler_base.h>
 #include <svo/reprojector.h>
+#include <svo/depth_filter.h>
 #include <svo/initialization.h>
 
 namespace svo {
@@ -33,8 +34,7 @@ class FrameHandlerStereo : public FrameHandlerBase
 public:
   EIGEN_MAKE_ALIGNED_OPERATOR_NEW
   
-  FrameHandlerStereo(vk::AbstractCamera* cam);
-  virtual ~FrameHandlerStereo();
+  FrameHandlerStereo(std::shared_ptr<vk::AbstractCamera> cam);
 
   /// Provide an image.
   void addImage(const cv::Mat& img_left, const cv::Mat& img_right, double timestamp);
@@ -46,7 +46,7 @@ public:
   const std::set<FramePtr>& coreKeyframes() { return core_kfs_; }
 
   /// Access the depth filter.
-  DepthFilter* depthFilter() const { return depth_filter_; }
+  DepthFilter* depthFilter() const { return depth_filter_.get(); }
 
   /// An external place recognition module may know where to relocalize.
   bool relocalizeFrameAtPose(const int keyframe_id,
@@ -55,13 +55,13 @@ public:
       const double timestamp);
 
 protected:
-  vk::AbstractCamera* cam_;                     //!< Camera model, can be ATAN, Pinhole or Ocam (see vikit).
+  std::shared_ptr<vk::AbstractCamera> cam_;                     //!< Camera model, can be ATAN, Pinhole or Ocam (see vikit).
   Reprojector reprojector_;                     //!< Projects points from other keyframes into the current frame
   FrameBundlePtr new_frames_;                   //!< Current frame.
   FrameBundlePtr last_frames_;                  //!< Last frame, not necessarily a keyframe.
   std::set<FramePtr> core_kfs_;                      //!< Keyframes in the closer neighbourhood.
   std::vector<std::pair<FramePtr,size_t> > overlap_kfs_; //!< All keyframes with overlapping field of view. the paired number specifies how many common mappoints are observed TODO: why vector!?
-  DepthFilter* depth_filter_;                   //!< Depth estimation algorithm runs in a parallel thread and is used to initialize new 3D points.
+  std::unique_ptr<DepthFilter> depth_filter_;                   //!< Depth estimation algorithm runs in a parallel thread and is used to initialize new 3D points.
 
   FrameBundlePtr last_keyframes_;               //!< Last keyframes, used at keyframe selection.
   std::deque<FrameBundlePtr> history_frames_;   //!< history frames, used at depth filter.

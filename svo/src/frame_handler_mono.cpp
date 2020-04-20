@@ -51,7 +51,19 @@ void FrameHandlerMono::initialize(std::shared_ptr<vilib::DetectorBaseGPU> detect
     depth_filter_->startThread();
 }
 
+
+
 void FrameHandlerMono::addImage(const cv::Mat& img, const double timestamp)
+{
+    // create new frame
+    SVO_START_TIMER("pyramid_creation");
+    auto frame = std::make_unique<Frame>(cam_.get(), img.clone(), timestamp);
+    SVO_STOP_TIMER("pyramid_creation");
+    addImage(std::move(frame), timestamp);
+}
+
+
+void FrameHandlerMono::addImage(std::unique_ptr<Frame> frame, double timestamp)
 {
   if(!startFrameProcessingCommon(timestamp))
     return;
@@ -60,10 +72,7 @@ void FrameHandlerMono::addImage(const cv::Mat& img, const double timestamp)
   core_kfs_.clear();
   overlap_kfs_.clear();
 
-  // create new frame
-  SVO_START_TIMER("pyramid_creation");
-  new_frame_.reset(new Frame(cam_.get(), img.clone(), timestamp));
-  SVO_STOP_TIMER("pyramid_creation");
+  new_frame_.reset(frame.release());
 
   // process frame
   UpdateResult res = RESULT_FAILURE;

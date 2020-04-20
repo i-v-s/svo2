@@ -34,11 +34,10 @@ namespace svo {
         for(int i=0;i<new_frames_->size();i++) printf("%f ", calcReprojectError(new_frames_->at(i))); \
         printf("\n");}*/
 
-FrameHandlerStereo::FrameHandlerStereo(vk::AbstractCamera* cam) :
+FrameHandlerStereo::FrameHandlerStereo(std::shared_ptr<vk::AbstractCamera> cam) :
   FrameHandlerBase(),
   cam_(cam),
-  reprojector_(cam_, map_),
-  depth_filter_(NULL)
+  reprojector_(cam_.get(), map_)
 {
   initialize();
   setRelocalize(false);
@@ -46,19 +45,15 @@ FrameHandlerStereo::FrameHandlerStereo(vk::AbstractCamera* cam) :
 
 void FrameHandlerStereo::initialize()
 {
-  feature_detection::DetectorPtr feature_detector(
-      new feature_detection::FastDetector(
-          cam_->width(), cam_->height(), Config::gridSize(), Config::nPyrLevels()));
-  DepthFilter::callback_t depth_filter_cb = boost::bind(
-      &MapPointCandidates::newCandidatePoint, &map_.point_candidates_, _1, _2);
-  depth_filter_ = new DepthFilter(feature_detector, depth_filter_cb);
-  depth_filter_->startThread();
+    feature_detection::DetectorPtr feature_detector(
+                new feature_detection::FastDetector(
+                    cam_->width(), cam_->height(), Config::gridSize(), Config::nPyrLevels()));
+    DepthFilter::callback_t depth_filter_cb = boost::bind(
+                &MapPointCandidates::newCandidatePoint, &map_.point_candidates_, _1, _2);
+    depth_filter_ = std::make_unique<DepthFilter>(feature_detector, depth_filter_cb);
+    depth_filter_->startThread();
 }
 
-FrameHandlerStereo::~FrameHandlerStereo()
-{
-  delete depth_filter_;
-}
 
 void FrameHandlerStereo::addImage(const cv::Mat& img_left, const cv::Mat& img_right, const double timestamp)
 {
@@ -392,9 +387,10 @@ bool FrameHandlerStereo::needNewKf(double scene_depth_mean)
 void FrameHandlerStereo::setCoreKfs(size_t n_closest)
 {
   size_t n = min(n_closest, overlap_kfs_.size()-1);
-  std::partial_sort(overlap_kfs_.begin(), overlap_kfs_.begin()+n, overlap_kfs_.end(),
-                    boost::bind(&pair<FramePtr, size_t>::second, _1) >
-                    boost::bind(&pair<FramePtr, size_t>::second, _2));
+  std::partial_sort(
+      overlap_kfs_.begin(), std::next(overlap_kfs_.begin(), n), overlap_kfs_.end(),
+      [](const pair<FramePtr, size_t> &a, const pair<FramePtr, size_t> &b){return a.second > b.second;}
+  );
   std::for_each(overlap_kfs_.begin(), overlap_kfs_.end(), [&](pair<FramePtr,size_t>& i){ core_kfs_.insert(i.first); });
 }
 

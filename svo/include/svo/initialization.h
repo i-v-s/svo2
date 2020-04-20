@@ -36,7 +36,7 @@ public:
     EIGEN_MAKE_ALIGNED_OPERATOR_NEW
 
     FramePtr frame_ref_;
-    KltHomographyInit(std::shared_ptr<vilib::DetectorBaseGPU> detector);;
+    KltHomographyInit(std::shared_ptr<vilib::DetectorBaseGPU> detector);
     InitResult addFirstFrame(FramePtr frame_ref);
     InitResult addSecondFrame(FramePtr frame_ref);
     void reset();

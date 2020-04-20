@@ -4,9 +4,8 @@ project(svo_root)
 include(CMakeHelpers.txt)
 
 option(WITH_PYTHON "Build Python bindings" ON)
-
-
-#set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/torch_svo)
+option(WITH_TESTS "Build tests" OFF)
+option(BUILD_SHARED_LIBS "Build shared libs" OFF)
 
 if(WITH_PYTHON)
     set(pybind11_SUBDIR ${CMAKE_CURRENT_LIST_DIR}/modules/pybind11)
@@ -20,10 +19,12 @@ add_subdirectory(svo ${CMAKE_BINARY_DIR}/svo)
 
 if(WITH_PYTHON)
     add_subdirectory(svo_python)
-    set_target_properties(torch_svo torch_vilib
+    set_target_properties(torch_svo
         PROPERTIES LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/torch_svo
     )
     configure_file(svo_python/root.py ${CMAKE_BINARY_DIR}/torch_svo/__init__.py COPYONLY)
+    configure_file(samples/detect.py ${CMAKE_BINARY_DIR}/detect.py COPYONLY)
+    configure_file(samples/handle.py ${CMAKE_BINARY_DIR}/handle.py COPYONLY)
 endif()
 
 set_target_properties(svo vikit_common vilib

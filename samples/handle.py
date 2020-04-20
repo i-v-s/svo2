@@ -1,16 +1,16 @@
+from torch_svo import data, detect, handler, camera
+
 # This Python file uses the following encoding: utf-8
 from argparse import ArgumentParser
 import torch
+from torch.nn import Module
 import cv2
-import pyvilib
-from pyvilib import Frame, FastDetectorCpuGrid, FastDetectorGpu
-import numpy as np
 from time import time
 
 
-def main(use_gpu=False):
+def main(use_gpu=True):
     print(torch.__version__)
-    print(dir(pyvilib))
+    # print(dir(pyvilib))
 
     parser = ArgumentParser(description='VILIB tester')
     parser.add_argument('source', type=str, help='Source video file path')
@@ -26,15 +26,21 @@ def main(use_gpu=False):
         if detector is None:
             h, w, c = image.shape
             detector = (
-                FastDetectorGpu if use_gpu else FastDetectorCpuGrid
-            )(w, h, 64, 64, 0, 1, 0, 0, 10.0, 10, pyvilib.SUM_OF_ABS_DIFF_ON_ARC)
+                detect.FastDetectorGpu if use_gpu else detect.FastDetectorCpuGrid
+            )(w, h, 64, 64, 0, 1, 0, 0, 10.0, 10, detect.SUM_OF_ABS_DIFF_ON_ARC)
+            cam = camera.CameraPinhole(1920, 1080, 300, 300, 960, 540)
+            h = handler.HandlerMono(cam, detector, 4)
+            h.start()
 
         image = torch.tensor(image[:, :, :1])
+
+        h.add_image(image)
+
         t1 = time()
-        frame = Frame(image, 0, 2)
+        # frame = data.Frame(image, 0, 2)
         t2 = time()
-        detector.reset()
-        detector.detect(frame.pyramid_gpu() if use_gpu else frame.pyramid_cpu())
+        # detector.reset()
+        # detector.detect(frame.pyramid_gpu() if use_gpu else frame.pyramid_cpu())
         t3 = time()
         count += 1
         frame_time += t2 - t1
@@ -42,7 +48,7 @@ def main(use_gpu=False):
         if t3 > tt + 5:
             print(f'Frame time {frame_time / count * 1000}ms, detect time {detect_time / count * 1000}ms')
             tt, frame_time, detect_time, count = time(), 0.0, 0.0, 0
-        detector.display_features('Features', frame.pyramid_cpu(), True)
+        # detector.display_features('Features', frame.pyramid_cpu(), True)
         k = cv2.waitKey(1)
         if k == ord('q'):
             break
@@ -60,3 +66,5 @@ def main(use_gpu=False):
 
 if __name__ == "__main__":
     main()
+
+

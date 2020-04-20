@@ -59,12 +59,25 @@ public:
   Sophus::SE3d T_body_cam_;
   Sophus::SE3d T_cam_body_;
 
-  Frame(vk::AbstractCamera* cam, const cv::Mat& img, double timestamp, size_t n_levels = 4);
+  template<class Image>
+  Frame(vk::AbstractCamera* cam, const Image& img, double timestamp, size_t n_levels = 4) :
+      vilib::Frame(img, timestamp, n_levels),
+      id_(frame_counter_++),
+      timestamp_(timestamp),
+      cam_(cam),
+      key_pts_(5),
+      is_keyframe_(false),
+      v_kf_(NULL)
+  {
+      // check image
+      if(img.empty() || img.type() != CV_8UC1 || img.cols != cam_->width() || img.rows != cam_->height())
+          throw std::runtime_error("Frame: provided image has not the same size as the camera model or image is not grayscale");
+
+      // Set keypoints to NULL
+      std::for_each(key_pts_.begin(), key_pts_.end(), [&](Feature* ftr){ ftr=NULL; });
+  }
 
   void update_features();
-
-  /// Initialize new frame and create image pyramid.
-  void initFrame(const cv::Mat& img);
 
   /// Select this frame as keyframe.
   void setKeyframe();
@@ -314,7 +327,8 @@ public:
   size_t numFeatures() const
   {
     int n = 0;
-    for(const FramePtr& frame : frames_) n += frame->num_features_;// fts_.size();
+    for(const FramePtr& frame : frames_)
+        n += frame->num_features_;// fts_.size();
     return n;
   }
 

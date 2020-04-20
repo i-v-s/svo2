@@ -1,28 +1,26 @@
-#include <svo/initialization.h>
-#include <pybind11/pybind11.h>
+#include <torch/extension.h>
+//#include <cuda.h>
+//#include <cuda_runtime.h>
+#include <iostream>
+#include <torch_frame.h>
 #include <vilib/feature_detection/fast/rosten/fast_cpu.h>
 #include <vilib/feature_detection/fast/fast_gpu.h>
-#include <torch_frame.h>
 
-#include "cameras.h"
-#include "handlers.h"
 
-using namespace std;
-using namespace svo;
-
-PYBIND11_MODULE(torch_svo, m) {
-    using namespace py;
-    using namespace vk;
+PYBIND11_MODULE(torch_vilib, m)
+{
+// data submodule
     auto m_data = m.def_submodule("data");
-    py::class_<TorchFrame>(m_data, "Frame")
+    py::class_<vilib::TorchFrame>(m_data, "Frame")
         .def(py::init<torch::Tensor, //const cv::Mat &,
              const int64_t,
              const std::size_t>())
         //.def("setName", &vilib::Subframe::setName)
         //.def("getName", &vilib::Subframe::getName)
-        .def("pyramid_cpu", &TorchFrame::pyramid_cpu)
-        .def("pyramid_gpu", &TorchFrame::pyramid_gpu)
-        .def_readonly("pyramid", &TorchFrame::pyramid_);
+        .def("pyramid_cpu", &vilib::TorchFrame::pyramid_cpu)
+        .def("pyramid_gpu", &vilib::TorchFrame::pyramid_gpu)
+        .def_readonly("pyramid", &vilib::TorchFrame::pyramid_);
+
 
     py::class_<vilib::Subframe, std::shared_ptr<vilib::Subframe>>(m_data, "Subframe");
     py::class_<cv::Mat>(m_data, "Mat");
@@ -36,7 +34,7 @@ PYBIND11_MODULE(torch_svo, m) {
         .export_values();
 
     py::class_<vilib::DetectorBase::FeaturePoint>(m_detect, "FeaturePoint");
-    py::class_<vilib::DetectorBaseGPU, shared_ptr<vilib::DetectorBaseGPU>>(m_detect, "DetectorGPU");
+
     py::class_<vilib::rosten::FASTCPU<true>>(m_detect, "FastDetectorCpuGrid")
         .def(py::init<
             const std::size_t/* image_width*/,
@@ -55,7 +53,7 @@ PYBIND11_MODULE(torch_svo, m) {
         .def("get_points", &vilib::rosten::FASTCPU<true>::getPoints)
         .def("display_features", &vilib::rosten::FASTCPU<true>::displayFeatures);
 
-    py::class_<vilib::FASTGPU, vilib::DetectorBaseGPU, shared_ptr<vilib::FASTGPU>>(m_detect, "FastDetectorGpu")
+    py::class_<vilib::FASTGPU>(m_detect, "FastDetectorGpu")
         .def(py::init<
             const std::size_t /*image_width*/,
             const std::size_t /*image_height*/,
@@ -72,16 +70,4 @@ PYBIND11_MODULE(torch_svo, m) {
         .def("detect", py::overload_cast<const std::vector<std::shared_ptr<vilib::Subframe>> &>(&vilib::FASTGPU::detect))
         .def("get_points", &vilib::FASTGPU::getPoints)
         .def("display_features", &vilib::FASTGPU::displayFeatures);
-
-    auto m_init = m.def_submodule("init");
-    class_<svo::initialization::KltHomographyInit>(m_init, "KltHomography")
-        .def(init<shared_ptr<vilib::DetectorBaseGPU>>(), py::arg("detector"));
-        //.def("setName", &vilib::Subframe::setName)
-        //.def("getName", &vilib::Subframe::getName)
-        //.def("pyramid_cpu", &vilib::TorchFrame::pyramid_cpu)
-        //.def("pyramid_gpu", &vilib::TorchFrame::pyramid_gpu)
-        //.def_readonly("pyramid", &vilib::TorchFrame::pyramid_);
-
-    initCameras(m);
-    initHandlers(m);
 }

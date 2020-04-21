@@ -6,6 +6,7 @@
 
 #include "cameras.h"
 #include "handlers.h"
+#include "visualize.h"
 
 using namespace std;
 using namespace svo;
@@ -69,7 +70,7 @@ PYBIND11_MODULE(torch_svo, m) {
             const int /*min_arc_length*/,
             vilib::fast_score /*score*/>())
         .def("reset", &vilib::FASTGPU::reset)
-        .def("detect", py::overload_cast<const std::vector<std::shared_ptr<vilib::Subframe>> &>(&vilib::FASTGPU::detect))
+        .def("detect", py::overload_cast<const std::vector<vilib::Subframe> &>(&vilib::FASTGPU::detect))
         .def("get_points", &vilib::FASTGPU::getPoints)
         .def("display_features", &vilib::FASTGPU::displayFeatures);
 
@@ -84,4 +85,5 @@ PYBIND11_MODULE(torch_svo, m) {
 
     initCameras(m);
     initHandlers(m);
+    initVisualize(m);
 }

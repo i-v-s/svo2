@@ -93,7 +93,7 @@ void SparseImgAlign::precomputeReferencePatches()
   {
     FramePtr ref_frame = *it;
     const int border = patch_halfsize_+1;
-    const cv::Mat& ref_img = *ref_frame->pyramid_.at(level_);
+    const cv::Mat& ref_img = ref_frame->pyramid_.at(level_);
     const int stride = ref_img.cols;
     const float scale = 1.0f/(1<<level_);
     const Vector3d ref_pos = ref_frame->pos();
@@ -176,7 +176,7 @@ double SparseImgAlign::computeResiduals(
     FramePtr cur_frame = cur_frames_->at(i);
 
     // Warp the (cur)rent image such that it aligns with the (ref)erence image
-    const cv::Mat& cur_img = *cur_frame->pyramid_.at(level_);
+    const cv::Mat& cur_img = cur_frame->pyramid_.at(level_);
 
     if(linearize_system && display_)
       resimg_ = cv::Mat(cur_img.size(), CV_32F, cv::Scalar(0));

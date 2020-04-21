@@ -30,7 +30,7 @@
 #ifdef ROS_SUPPORT
 #include <sensor_msgs/Image.h>
 #endif /* ROS_SUPPORT */
-//#include "vilib/common/types.h"
+#include "vilib/storage/pyramid_pool.h"
 #include "vilib/storage/subframe.h"
 
 class TorchFrame {
@@ -46,8 +46,6 @@ public:
 #endif /* ROS_SUPPORT */
   ~TorchFrame(void);
 
-  //image_pyramid_descriptor_t getPyramidDescriptor(void) const;
-
   void resizeFeatureStorage(std::size_t new_size);
 
   // Unique ID of the frame
@@ -55,9 +53,10 @@ public:
   // Timestamp of frame in nanoseconds
   int64_t timestamp_nsec_;
   // Vector holding the image pyramid either in host or GPU memory
-  std::vector<std::shared_ptr<vilib::Subframe>> pyramid_;
+  std::vector<vilib::Subframe> pyramid_;
+  vilib::PyramidPool *pyramid_pool;
   std::vector<cv::Mat> pyramid_cpu();
-  std::vector<std::shared_ptr<vilib::Subframe>> pyramid_gpu();
+  std::vector<vilib::Subframe> pyramid_gpu();
 
   // Number of successfully extracted features
   std::size_t num_features_ = 0u;

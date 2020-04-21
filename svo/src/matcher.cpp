@@ -164,7 +164,7 @@ bool Matcher::findMatchDirect(
       (ref_ftr_->frame->pos() - pt.pos_).norm(),
       cur_frame.T_f_w_ * ref_ftr_->frame->T_f_w_.inverse(), ref_ftr_->level, A_cur_ref_);
   search_level_ = warp::getBestSearchLevel(A_cur_ref_, Config::nPyrLevels()-1);
-  warp::warpAffine(A_cur_ref_, ref_ftr_->frame->pyramid_[ref_ftr_->level].get(), ref_ftr_->px,
+  warp::warpAffine(A_cur_ref_, ref_ftr_->frame->pyramid_[ref_ftr_->level], ref_ftr_->px,
                    ref_ftr_->level, search_level_, halfpatch_size_+1, patch_with_border_);
   createPatchFromPatchWithBorder();
 
@@ -177,13 +177,13 @@ bool Matcher::findMatchDirect(
     Vector2d dir_cur(A_cur_ref_*ref_ftr_->grad);
     dir_cur.normalize();
     success = feature_alignment::align1D(
-          *cur_frame.pyramid_[search_level_], dir_cur.cast<float>(),
+          cur_frame.pyramid_[search_level_], dir_cur.cast<float>(),
           patch_with_border_, patch_, options_.align_max_iter, px_scaled, h_inv_);
   }
   else
   {
     success = feature_alignment::align2D(
-      *cur_frame.pyramid_[search_level_], patch_with_border_, patch_,
+      cur_frame.pyramid_[search_level_], patch_with_border_, patch_,
       options_.align_max_iter, px_scaled);
   }
   px_cur = px_scaled * (1<<search_level_);
@@ -233,7 +233,7 @@ bool Matcher::findEpipolarMatchDirect(
   epi_length_ = (px_A-px_B).norm() / (1<<search_level_);
 
   // Warp reference patch at ref_level
-  warp::warpAffine(A_cur_ref_, *ref_frame.pyramid_[ref_ftr.level], ref_ftr.px,
+  warp::warpAffine(A_cur_ref_, ref_frame.pyramid_[ref_ftr.level], ref_ftr.px,
                    ref_ftr.level, search_level_, halfpatch_size_+1, patch_with_border_);
   createPatchFromPatchWithBorder();
 
@@ -244,11 +244,11 @@ bool Matcher::findEpipolarMatchDirect(
     bool res;
     if(options_.align_1d)
       res = feature_alignment::align1D(
-          *cur_frame.pyramid_[search_level_], (px_A-px_B).cast<float>().normalized(),
+          cur_frame.pyramid_[search_level_], (px_A-px_B).cast<float>().normalized(),
           patch_with_border_, patch_, options_.align_max_iter, px_scaled, h_inv_);
     else
       res = feature_alignment::align2D(
-          *cur_frame.pyramid_[search_level_], patch_with_border_, patch_,
+          cur_frame.pyramid_[search_level_], patch_with_border_, patch_,
           options_.align_max_iter, px_scaled);
     if(res)
     {
@@ -293,7 +293,7 @@ bool Matcher::findEpipolarMatchDirect(
       continue;
 
     // TODO interpolation would probably be a good idea
-    cv::Mat img = *cur_frame.pyramid_[search_level_];
+    cv::Mat img = cur_frame.pyramid_[search_level_];
     uint8_t* cur_patch_ptr = img.data
                              + (pxi[1] - halfpatch_size_) * img.cols
                              + (pxi[0] - halfpatch_size_);
@@ -314,11 +314,11 @@ bool Matcher::findEpipolarMatchDirect(
       bool res;
       if(options_.align_1d)
         res = feature_alignment::align1D(
-            *cur_frame.pyramid_[search_level_], (px_A-px_B).cast<float>().normalized(),
+            cur_frame.pyramid_[search_level_], (px_A-px_B).cast<float>().normalized(),
             patch_with_border_, patch_, options_.align_max_iter, px_scaled, h_inv_);
       else
         res = feature_alignment::align2D(
-            *cur_frame.pyramid_[search_level_], patch_with_border_, patch_,
+            cur_frame.pyramid_[search_level_], patch_with_border_, patch_,
             options_.align_max_iter, px_scaled);
       if(res)
       {

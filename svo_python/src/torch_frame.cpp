@@ -23,7 +23,6 @@
 #include <sensor_msgs/image_encodings.h>
 #endif /* ROS_SUPPORT */
 #include "torch_frame.h"
-#include "vilib/storage/pyramid_pool.h"
 #include "vilib/preprocess/image_preprocessing.h"
 #include "vilib/preprocess/pyramid.h"
 #include "vilib/config.h"
@@ -71,19 +70,10 @@ TorchFrame::TorchFrame(const int64_t timestamp_nsec,
              const std::size_t image_height,
              const std::size_t n_pyr_levels) :
   id_(getNewId()),
-  timestamp_nsec_(timestamp_nsec) {
-  /*
-   * Note: we allocate space for a grayscale image,
-   *       irrespective of the input image
-   */
-  vilib::PyramidPool::get(IMAGE_PYRAMID_PREALLOCATION_ITEM_NUM,
-                   image_width,
-                   image_height,
-                   1,
-                   n_pyr_levels,
-                   //vilib::Subframe::MemoryType::PAGED_HOST_MEMORY,
-                   vilib::IMAGE_PYRAMID_MEMORY_TYPE,
-                   pyramid_);
+  timestamp_nsec_(timestamp_nsec),
+  pyramid_pool(vilib::PyramidPool::get_pool(image_width, image_height, 1, n_pyr_levels, vilib::IMAGE_PYRAMID_MEMORY_TYPE))
+{
+    pyramid_pool->get(pyramid_);
 }
 
 std::size_t TorchFrame::getNewId(void) {
@@ -92,8 +82,8 @@ std::size_t TorchFrame::getNewId(void) {
 }
 
 TorchFrame::~TorchFrame(void) {
-  // return the pyramid buffers
-  vilib::PyramidPool::release(pyramid_);
+    // return the pyramid buffers
+    pyramid_pool->release(std::move(pyramid_));
 }
 
 /*image_pyramid_descriptor_t TorchFrame::getPyramidDescriptor(void) const {
@@ -126,12 +116,12 @@ std::vector<cv::Mat> TorchFrame::pyramid_cpu()
 {
     std::vector<cv::Mat> pyramid;
     cv::Mat image;
-    pyramid_[0]->copy_to(image);
+    pyramid_[0].copy_to(image);
     vilib::pyramid_create_cpu(image, pyramid, pyramid_.size(), false);
     return pyramid;
 }
 
-std::vector<std::shared_ptr<vilib::Subframe> > TorchFrame::pyramid_gpu()
+std::vector<vilib::Subframe> TorchFrame::pyramid_gpu()
 {
     return pyramid_;
 }

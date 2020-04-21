@@ -150,8 +150,8 @@ void KltHomographyInit::trackKlt(
     std::vector<float> min_eig_vec;
     cv::TermCriteria termcrit(cv::TermCriteria::COUNT + cv::TermCriteria::EPS, klt_max_iter, klt_eps);
     cv::Mat img_ref, img_cur;
-    frame_ref->pyramid_[0]->copy_to(img_ref);
-    frame_cur->pyramid_[0]->copy_to(img_cur);
+    frame_ref->pyramid_[0].copy_to(img_ref);
+    frame_cur->pyramid_[0].copy_to(img_cur);
     cv::calcOpticalFlowPyrLK(img_ref, img_cur,
                              px_ref, px_cur,
                              status, error,

@@ -121,7 +121,7 @@ FrameHandlerBase::UpdateResult FrameHandlerMono::processSecondFrame()
   new_frame_->setKeyframe();
   double depth_mean, depth_min;
   frame_utils::getSceneDepth(*new_frame_, depth_mean, depth_min);
-  depth_filter_->addKeyframe(new_frame_, depth_mean, 0.5*depth_min);
+  depth_filter_->addKeyframe(new_frame_, depth_mean, 0.5 * depth_min);
 
   // add frame to map
   map_.addKeyframe(new_frame_);

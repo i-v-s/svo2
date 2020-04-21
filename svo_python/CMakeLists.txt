@@ -29,6 +29,7 @@ add_library(torch_svo MODULE
     src/cameras.cpp     include/cameras.h
     src/handlers.cpp    include/handlers.h
     src/torch_frame.cpp include/torch_frame.h
+    src/visualize.cpp   include/visualize.h
 )
 target_include_directories(torch_svo PRIVATE
     ${TORCH_INCLUDE_DIR}

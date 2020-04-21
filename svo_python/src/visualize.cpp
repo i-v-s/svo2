@@ -15,7 +15,7 @@
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 #include <visualize.h>
-#include <svo/frame_handler_mono.h>
+#include <handlers.h>
 #include <svo/frame.h>
 #include <svo/point.h>
 #include <svo/map.h>
@@ -112,6 +112,7 @@ cv::Mat visualizeMinimal(const cv::Mat& img,
             p[0] = 0; p[1] = 255; p[2] = 0;
         }
     }
+    cv::imshow("img_rgb", img_rgb);
     return img_rgb;
 }
 
@@ -236,14 +237,21 @@ void Visualizer::exportToDense(const FramePtr& frame)
 
 } // end namespace svo
 
-py::array visualizeMinimalWrapper(
-        const cv::Mat& img,
-        const svo::FramePtr& frame,
-        const std::shared_ptr<svo::FrameHandlerMono>& slam,
+py::array_t<uchar> visualizeMinimalWrapper(
+        //const cv::Mat& img,
+        py::array_t<uchar> img,
+        //const svo::FramePtr& frame,
+        std::shared_ptr<FHMWrapper> slam,
         size_t level)
 {
-    cv::Mat result = svo::visualizeMinimal(img, frame, *slam, level);
-    return py::array_t<uint8_t>({result.rows, result.cols, result.channels()}, result.data);
+    if (img.ndim() != 3)
+        assert(false);
+    int h = img.shape(0), w = img.shape(1), c = img.shape(2);
+    size_t strides[] = {(size_t)img.strides(0), (size_t)img.strides(1), (size_t)img.strides(2)};
+    std::vector<int> sizes = {h, w, c};
+    cv::Mat img_mat(sizes, CV_8U, (void *)img.data(), strides);
+    svo::visualizeMinimal(img_mat, slam->lastFrame(), *slam, level);
+    return img;
 }
 
 void initVisualize(py::module &m)

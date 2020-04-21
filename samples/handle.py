@@ -1,4 +1,4 @@
-from torch_svo import data, detect, handler, camera
+from torch_svo import data, detect, handler, camera, visualize
 
 # This Python file uses the following encoding: utf-8
 from argparse import ArgumentParser
@@ -32,9 +32,11 @@ def main(use_gpu=True):
             h = handler.HandlerMono(cam, detector, 4)
             h.start()
 
-        image = torch.tensor(image[:, :, :1])
+        tensor = torch.tensor(image[:, :, :1])
 
-        h.add_image(image)
+        h.add_image(tensor)
+        vis = visualize.visualizeMinimal(image, h, 0)
+        cv2.imshow('vis', vis)
 
         t1 = time()
         # frame = data.Frame(image, 0, 2)

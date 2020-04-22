@@ -143,17 +143,6 @@ FrameBundle::FrameBundle(const std::vector<FramePtr>& frames) :
 /// Utility functions for the Frame class
 namespace frame_utils {
 
-void createImgPyramid(const cv::Mat& img_level_0, int n_levels, ImgPyr& pyr)
-{
-  pyr.resize(n_levels);
-  pyr[0] = img_level_0;
-  for(int i=1; i<n_levels; ++i)
-  {
-    pyr[i] = cv::Mat(pyr[i-1].rows/2, pyr[i-1].cols/2, CV_8U);
-    vk::halfSample(pyr[i-1], pyr[i]);
-  }
-}
-
 bool getSceneDepth(const Frame& frame, double& depth_mean, double& depth_min)
 {
   std::vector<double> depth_vec;

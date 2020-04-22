@@ -369,9 +369,6 @@ private:
 /// Some helper functions for the frame object.
 namespace frame_utils {
 
-/// Creates an image pyramid of half-sampled images.
-void createImgPyramid(const cv::Mat& img_level_0, int n_levels, ImgPyr& pyr);
-
 /// Get the average depth of the features in the image.
 bool getSceneDepth(const Frame& frame, double& depth_mean, double& depth_min);
 

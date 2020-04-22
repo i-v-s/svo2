@@ -38,9 +38,9 @@ public:
     FramePtr frame_ref_;
     KltHomographyInit(std::shared_ptr<vilib::DetectorBaseGPU> detector);
     InitResult addFirstFrame(FramePtr frame_ref);
-    InitResult addSecondFrame(FramePtr frame_ref);
+    InitResult addSecondFrame(Frame *frame_ref);
     void reset();
-    InitResult initFrameStereo(FramePtr frame_left, FramePtr frame_right);
+    InitResult initFrameStereo(Frame *frame_left, Frame *frame_right);
 
 protected:
     std::vector<cv::Point2f> px_ref_;      //!< keypoints to be tracked in reference frame.
@@ -55,14 +55,14 @@ protected:
 
     /// Detect Fast corners in the image.
     void detectFeatures(
-            FramePtr frame,
+            Frame *frame,
             std::vector<cv::Point2f>& px_vec,
             std::vector<Vector3d>& f_vec);
 
     /// Compute optical flow (Lucas Kanade) for selected keypoints.
     void trackKlt(
-            FramePtr frame_ref,
-            FramePtr frame_cur,
+            Frame *frame_ref,
+            Frame *frame_cur,
             std::vector<cv::Point2f>& px_ref,
             std::vector<cv::Point2f>& px_cur,
             std::vector<Vector3d>& f_ref,

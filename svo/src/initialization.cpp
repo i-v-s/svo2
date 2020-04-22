@@ -37,7 +37,7 @@ KltHomographyInit::KltHomographyInit(std::shared_ptr<vilib::DetectorBaseGPU> det
 InitResult KltHomographyInit::addFirstFrame(FramePtr frame_ref)
 {
     reset();
-    detectFeatures(frame_ref, px_ref_, f_ref_);
+    detectFeatures(frame_ref.get(), px_ref_, f_ref_);
     if(px_ref_.size() < 100)
     {
         SVO_WARN_STREAM_THROTTLE(2.0, "First image has less than 100 features. Retry in more textured environment.");
@@ -48,9 +48,9 @@ InitResult KltHomographyInit::addFirstFrame(FramePtr frame_ref)
     return SUCCESS;
 }
 
-InitResult KltHomographyInit::addSecondFrame(FramePtr frame_cur)
+InitResult KltHomographyInit::addSecondFrame(Frame *frame_cur)
 {
-    trackKlt(frame_ref_, frame_cur, px_ref_, px_cur_, f_ref_, f_cur_, disparities_);
+    trackKlt(frame_ref_.get(), frame_cur, px_ref_, px_cur_, f_ref_, f_cur_, disparities_);
     SVO_INFO_STREAM("Init: KLT tracked "<< disparities_.size() <<" features");
 
     if(disparities_.size() < Config::initMinTracked())
@@ -94,7 +94,7 @@ InitResult KltHomographyInit::addSecondFrame(FramePtr frame_cur)
             Vector3d pos = T_world_cur * (xyz_in_cur_[*it]*scale);
             Point* new_point = new Point(pos);
 
-            Feature* ftr_cur(new Feature(frame_cur.get(), new_point, px_cur, f_cur_[*it], 0));
+            Feature* ftr_cur(new Feature(frame_cur, new_point, px_cur, f_cur_[*it], 0));
             frame_cur->addFeature(ftr_cur);
             new_point->addFrameRef(ftr_cur);
 
@@ -113,7 +113,7 @@ void KltHomographyInit::reset()
 }
 
 void KltHomographyInit::detectFeatures(
-        FramePtr frame,
+        Frame *frame,
         std::vector<cv::Point2f>& px_vec,
         std::vector<Vector3d>& f_vec)
 {
@@ -134,8 +134,8 @@ void KltHomographyInit::detectFeatures(
 }
 
 void KltHomographyInit::trackKlt(
-        FramePtr frame_ref,
-        FramePtr frame_cur,
+        Frame *frame_ref,
+        Frame *frame_cur,
         std::vector<cv::Point2f>& px_ref,
         std::vector<cv::Point2f>& px_cur,
         std::vector<Vector3d>& f_ref,
@@ -205,7 +205,7 @@ void computeHomography(
     T_cur_from_ref = Homography.T_c2_from_c1;
 }
 
-InitResult KltHomographyInit::initFrameStereo(FramePtr frame_left, FramePtr frame_right)
+InitResult KltHomographyInit::initFrameStereo(Frame *frame_left, Frame *frame_right)
 {
     vector<cv::Point2f> px_left, px_right;
     vector<Vector3d> f_left, f_right;   //!< bearing vectors corresponding to the keypoints in the reference image.
@@ -231,11 +231,11 @@ InitResult KltHomographyInit::initFrameStereo(FramePtr frame_left, FramePtr fram
         Vector3d pos = frame_left->T_f_w_.inverse() * (f_left[i] * z / f_left[i].z());
         Point* new_point = new Point(pos);
 
-        Feature* ftr_left(new Feature(frame_left.get(), new_point, Vector2d(p_left.x, p_left.y), f_left[i], 0));
+        Feature* ftr_left(new Feature(frame_left, new_point, Vector2d(p_left.x, p_left.y), f_left[i], 0));
         frame_left->addFeature(ftr_left);
         new_point->addFrameRef(ftr_left);
 
-        Feature* ftr_right(new Feature(frame_right.get(), new_point, Vector2d(p_right.x, p_right.y), f_right[i], 0));
+        Feature* ftr_right(new Feature(frame_right, new_point, Vector2d(p_right.x, p_right.y), f_right[i], 0));
         frame_right->addFeature(ftr_right);
         new_point->addFrameRef(ftr_right);
 

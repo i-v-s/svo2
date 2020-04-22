@@ -121,7 +121,13 @@ std::vector<cv::Mat> TorchFrame::pyramid_cpu()
     return pyramid;
 }
 
-std::vector<vilib::Subframe> TorchFrame::pyramid_gpu()
+std::vector<std::shared_ptr<vilib::Subframe>> TorchFrame::pyramid_gpu()
 {
-    return pyramid_;
+    if (shared_pyramid.empty()) {
+        shared_pyramid.reserve(pyramid_.size());
+        for (auto &sf : pyramid_)
+            shared_pyramid.emplace_back(&sf);
+    }
+
+    return shared_pyramid;
 }

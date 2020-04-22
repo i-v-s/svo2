@@ -54,9 +54,10 @@ public:
   int64_t timestamp_nsec_;
   // Vector holding the image pyramid either in host or GPU memory
   std::vector<vilib::Subframe> pyramid_;
+  std::vector<std::shared_ptr<vilib::Subframe>> shared_pyramid;
   vilib::PyramidPool *pyramid_pool;
   std::vector<cv::Mat> pyramid_cpu();
-  std::vector<vilib::Subframe> pyramid_gpu();
+  std::vector<std::shared_ptr<vilib::Subframe>> pyramid_gpu();
 
   // Number of successfully extracted features
   std::size_t num_features_ = 0u;

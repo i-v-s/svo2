@@ -1,3 +1,4 @@
+#include <vector>
 #include <svo/initialization.h>
 #include <pybind11/pybind11.h>
 #include <vilib/feature_detection/fast/rosten/fast_cpu.h>
@@ -25,7 +26,7 @@ PYBIND11_MODULE(torch_svo, m) {
         .def("pyramid_gpu", &TorchFrame::pyramid_gpu)
         .def_readonly("pyramid", &TorchFrame::pyramid_);
 
-    py::class_<vilib::Subframe, std::shared_ptr<vilib::Subframe>>(m_data, "Subframe");
+    py::class_<vilib::Subframe, shared_ptr<vilib::Subframe>>(m_data, "Subframe");
     py::class_<cv::Mat>(m_data, "Mat");
 
 // detect submodule
@@ -70,7 +71,7 @@ PYBIND11_MODULE(torch_svo, m) {
             const int /*min_arc_length*/,
             vilib::fast_score /*score*/>())
         .def("reset", &vilib::FASTGPU::reset)
-        .def("detect", py::overload_cast<const std::vector<vilib::Subframe> &>(&vilib::FASTGPU::detect))
+        .def("detect", py::overload_cast<vector<shared_ptr<vilib::Subframe>>>(&vilib::FASTGPU::detect))
         .def("get_points", &vilib::FASTGPU::getPoints)
         .def("display_features", &vilib::FASTGPU::displayFeatures);
 
